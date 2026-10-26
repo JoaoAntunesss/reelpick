@@ -147,3 +147,22 @@ textarea{width:100%;background:#0f0a1a;color:var(--text);border:1px solid var(--
 .tastesline{margin:10px 0;color:var(--muted);font-size:13px}.tastesline b{color:var(--text)}
 .tasteline-chips{color:var(--cyan)}
 @media (max-width:900px){.potdbody{flex-direction:row}.potdbody img{width:78px;height:117px}}
+
+/* ---- polish ---- */
+.keybar{display:flex;gap:14px;align-items:center;justify-content:center;flex-wrap:wrap;margin:12px 0 0}
+.keytop{background:linear-gradient(135deg,#ffd666,#ff9f1c);color:#2a1b00;border:0;border-radius:999px;padding:10px 20px;font-weight:700;cursor:pointer;box-shadow:0 0 0 0 #ffc83d99;animation:keypulse 2.2s infinite}
+.keytop:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.keytop.ok{background:#12301f;color:#7dffb0;border:1px solid #2b7a4b;animation:none;font-weight:600}
+@keyframes keypulse{70%{box-shadow:0 0 0 14px #ffc83d00}100%{box-shadow:0 0 0 0 #ffc83d00}}
+.top h1{background:linear-gradient(180deg,#fff3c4,#ffc83d 55%,#ff9f1c);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 18px #ffc83d66)}
+.top h1 .bulb{filter:none}
+body{background:radial-gradient(900px 500px at 15% -10%,#2a1050aa,transparent),radial-gradient(800px 500px at 100% 10%,#4a0f3a66,transparent),var(--bg)}
+.chip{transition:transform .12s,box-shadow .12s,background .12s}.chip:hover{transform:translateY(-1px);box-shadow:0 0 12px #38e8ff55}
+.chip.on{box-shadow:0 0 14px #38e8ff88}
+aside,.potd,.result,.howto{backdrop-filter:blur(6px)}
+#spin{box-shadow:0 8px 0 #9c1d4f,0 0 36px #ff3d8199;transition:transform .1s,box-shadow .1s}
+#spin:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 10px 0 #9c1d4f,0 0 48px #ff3d81cc}
+#spin:active:not(:disabled){transform:translateY(6px);box-shadow:0 2px 0 #9c1d4f,0 0 24px #ff3d81}
+.potd{transition:box-shadow .2s}.potd:hover{box-shadow:0 0 44px #ffc83d33}
+.potdbody img{transition:transform .2s}.potdbody img:hover{transform:scale(1.05) rotate(-1deg)}
+@media (prefers-reduced-motion:reduce){.keytop{animation:none}}

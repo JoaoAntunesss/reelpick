@@ -162,11 +162,13 @@ function initStatic() {
     } catch (e) { say("That file is not a valid ReelPick list."); }
     $("seenFile").value = "";
   };
-  $("keyBtn").onclick = () => { $("keyInput").value = key; $("dlg").showModal(); };
+  const paintKey = () => { const b = $("keyTop"); b.classList.toggle("ok", !!key); b.textContent = key ? "🔑 TMDB key connected ✓" : "🔑 Add your free TMDB key"; b.title = key ? "Change or remove your key" : "Unlock every movie and series plus platform filters"; };
+  const openKey = () => { $("keyInput").value = key; $("dlg").showModal(); };
+  $("keyBtn").onclick = openKey; $("keyTop").onclick = openKey; paintKey();
   $("dlg").addEventListener("close", () => {
     const v = $("dlg").returnValue;
-    if (v === "save") { key = $("keyInput").value.trim(); store.set("rp_key", key); demo = !key; state.providers.clear(); say(""); loadMeta(); }
-    else if (v === "demo") { key = ""; store.set("rp_key", ""); demo = true; loadMeta(); }
+    if (v === "save") { key = $("keyInput").value.trim(); store.set("rp_key", key); demo = !key; paintKey(); state.providers.clear(); say(""); loadMeta(); }
+    else if (v === "demo") { key = ""; store.set("rp_key", ""); demo = true; paintKey(); loadMeta(); }
   });
 }
 const soundLabel = () => { $("sound").textContent = "Sound: " + (state.sound ? "on" : "off"); $("sound").setAttribute("aria-pressed", state.sound); };
