@@ -109,9 +109,23 @@
 
 <footer>
   <p>This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data provided by JustWatch via TMDB.</p>
-  <p><button id="keyBtn" class="link">TMDB key…</button> · <button id="clearSeen" class="link">Forget "seen" list</button></p>
+  <p><button id="keyBtn" class="link">TMDB key…</button> · <button id="seenBtn" class="link">My seen list (0)</button></p>
 </footer>
 
+<dialog id="seenDlg" class="wide">
+  <form method="dialog">
+    <h3>My seen list</h3>
+    <p class="hint">Titles you marked as seen are never picked again. The list lives in this browser only, so use Export to keep a backup or move it to another device.</p>
+    <div id="seenGrid" class="seengrid"></div>
+    <div class="row">
+      <button type="button" id="seenExport">Export</button>
+      <button type="button" id="seenImport">Import</button>
+      <input type="file" id="seenFile" accept="application/json" hidden>
+      <button type="button" id="seenClear" class="ghost">Clear all</button>
+      <button value="close" class="ghost">Close</button>
+    </div>
+  </form>
+</dialog>
 <dialog id="dlg">
   <form method="dialog">
     <h3>Connect to TMDB (free)</h3>

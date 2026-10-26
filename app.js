@@ -18,7 +18,24 @@ let key = store.get("rp_key");
 let demo = !key;
 let genreList = [];            // [{name, movie, tv}]
 let providerList = [];         // [{id, name, logo}]
-let seen = new Set(JSON.parse(store.get("rp_seen", "[]") || "[]"));
+const seen = new Map();   // "type:id" -> {id,type,title,year,poster}
+try {
+  JSON.parse(store.get("rp_seen", "[]") || "[]").forEach((x) => { if (typeof x === "string") { const [t, i] = x.split(":"); seen.set(x, { type: t, id: Number(i), title: "Unknown title", year: "", poster: null }); } else if (x && x.type && x.id) seen.set(x.type + ":" + x.id, x); });
+} catch (e) { /* start empty */ }
+const saveSeen = () => { store.set("rp_seen", JSON.stringify([...seen.values()])); $("seenBtn").textContent = "My seen list (" + seen.size + ")"; };
+function markSeen(it) { seen.set(it.type + ":" + it.id, { id: it.id, type: it.type, title: it.title, year: it.year || "", poster: it.poster || null }); saveSeen(); }
+function renderSeen() {
+  const g = $("seenGrid"); g.replaceChildren();
+  if (!seen.size) { g.appendChild(el("p", null, "Nothing here yet. Press “Seen it — spin again” on a result to add it.")); return; }
+  [...seen.entries()].reverse().forEach(([k, it]) => {
+    const d = el("div", "sitem");
+    if (it.poster) { const i = el("img"); i.src = it.poster; i.alt = it.title; i.loading = "lazy"; d.appendChild(i); d.appendChild(el("div", "cap", it.title)); }
+    else d.appendChild(el("div", "ph", it.title + (it.year ? " (" + it.year + ")" : "")));
+    const x = el("button", null, "×"); x.type = "button"; x.title = "Remove from seen"; x.setAttribute("aria-label", "Remove " + it.title + " from seen list");
+    x.onclick = () => { seen.delete(k); saveSeen(); renderSeen(); };
+    d.appendChild(x); g.appendChild(d);
+  });
+}
 let current = null, spinning = false, lastWinner = null, audio = null;
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -102,8 +119,23 @@ function initStatic() {
   $("sound").onclick = () => { state.sound = !state.sound; store.set("rp_sound", state.sound ? "1" : "0"); soundLabel(); };
   soundLabel();
   $("spin").onclick = () => spin();
-  $("seen").onclick = () => { if (current) { seen.add(current.type + ":" + current.id); store.set("rp_seen", JSON.stringify([...seen])); } spin(); };
-  $("clearSeen").onclick = () => { seen = new Set(); store.set("rp_seen", "[]"); say("“Seen” list cleared."); };
+  $("seen").onclick = () => { if (current) markSeen(current); spin(); };
+  saveSeen();
+  $("seenBtn").onclick = () => { renderSeen(); $("seenClear").textContent = "Clear all"; $("seenDlg").showModal(); };
+  $("seenClear").onclick = () => { if ($("seenClear").textContent === "Clear all") { $("seenClear").textContent = "Click again to confirm"; return; } seen.clear(); saveSeen(); renderSeen(); $("seenClear").textContent = "Clear all"; };
+  $("seenExport").onclick = () => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify([...seen.values()], null, 1)], { type: "application/json" }));
+    const a = el("a"); a.href = url; a.download = "reelpick-seen.json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  $("seenImport").onclick = () => $("seenFile").click();
+  $("seenFile").onchange = async () => {
+    try {
+      const list = JSON.parse(await $("seenFile").files[0].text());
+      let n = 0; (Array.isArray(list) ? list : []).forEach((x) => { if (x && (x.type === "movie" || x.type === "tv") && Number.isFinite(x.id)) { seen.set(x.type + ":" + x.id, { id: x.id, type: x.type, title: String(x.title || "Unknown title").slice(0, 200), year: String(x.year || "").slice(0, 4), poster: typeof x.poster === "string" && x.poster.startsWith("https://image.tmdb.org/") ? x.poster : null }); n++; } });
+      saveSeen(); renderSeen(); say("Imported " + n + " titles.");
+    } catch (e) { say("That file is not a valid ReelPick list."); }
+    $("seenFile").value = "";
+  };
   $("keyBtn").onclick = () => { $("keyInput").value = key; $("dlg").showModal(); };
   $("dlg").addEventListener("close", () => {
     const v = $("dlg").returnValue;

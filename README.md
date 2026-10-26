@@ -14,7 +14,7 @@ The key stays in your browser (localStorage) and is sent only to api.themoviedb.
 ## Filters
 Movies / Series / Both, genres (any or all), your platforms for your country (flatrate only, via TMDB/JustWatch data),
 styles (crowd pleasers, hidden gems, critically acclaimed, classics, recent, short), minimum rating.
-"Seen it" titles are remembered locally and skipped.
+"Seen it" titles go to a local "My seen list" (with posters, remove, export/import as JSON) and are never picked again.
 
 ## How a spin works
 One discover request finds how many pages match, a random page is fetched, and one title is picked from it.
