@@ -99,3 +99,51 @@ dialog.wide{width:min(720px,94vw)}
 .sitem .cap{position:absolute;left:0;right:0;bottom:0;padding:16px 6px 5px;font-size:11px;background:linear-gradient(transparent,#000d)}
 .sitem button{position:absolute;top:4px;right:4px;width:26px;height:26px;padding:0;border-radius:50%;background:#000b;line-height:1}
 #seenFile{display:none!important}
+
+/* ---- accounts, editor, profile view ---- */
+.account{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin:10px 0 4px}
+#who{color:var(--muted);font-size:13px}
+.edit{border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0;background:#110a1f}
+.edit h4,dialog h4{margin:0 0 8px;font-size:14px}
+.stars{display:flex;gap:4px;margin-bottom:8px}
+.stars button{padding:2px 8px;font-size:22px;line-height:1.2;color:#5a4d7a;background:transparent}
+.stars button.on{color:var(--gold)}
+textarea{width:100%;background:#0f0a1a;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px;font:inherit;resize:vertical}
+.pinbox{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap}.pinbox input{flex:1;min-width:180px;margin:0}
+.inline{display:flex;gap:8px;margin-top:4px}.inline input{margin:0;flex:1}
+.pinned{display:flex;gap:12px;align-items:flex-start;min-height:20px}
+.pinned img,.pcard img{width:70px;height:105px;object-fit:cover;border-radius:8px;flex:none;background:#1a1130}
+.pcard{display:flex;gap:12px;padding:12px;margin:10px 0;border:1px solid #7a5a10;border-radius:12px;background:linear-gradient(160deg,#2c2108,#150e24)}
+.pcard h4{margin:0 0 2px;color:var(--gold)}.pcard p{margin:4px 0}.pcard .lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold)}
+.vhead h3{margin:0}.vhead span{color:var(--muted);font-size:13px}
+.vbody{max-height:50vh;overflow:auto;margin:10px 0}
+.vbody h4{color:var(--gold);margin:14px 0 6px}
+.rrow{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.rrow img{width:46px;height:69px;object-fit:cover;border-radius:6px;flex:none;background:#1a1130}
+.rrow .t{font-weight:600}.rrow .s{color:var(--gold);letter-spacing:.1em}.rrow .rv{margin:2px 0 0;color:#d9d0f0;white-space:pre-wrap;overflow-wrap:anywhere}
+.rrow .who{color:var(--muted);font-size:12px}.rrow.diff{background:#2b1030;border-radius:8px;padding-left:6px}
+.flist{margin:12px 0}.frow{display:flex;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}.frow span{flex:1}.frow small{color:var(--muted)}
+.sitem.cl{cursor:pointer}.sitem .rt{position:absolute;left:4px;top:4px;background:#000b;color:var(--gold);border-radius:6px;padding:0 5px;font-size:11px}
+
+.badge{display:inline-block;min-width:18px;margin-left:6px;padding:0 5px;border-radius:99px;background:var(--neon);color:#fff;font-size:11px;line-height:18px}
+.phead{display:flex;gap:14px;align-items:center;margin:8px 0}.phead .col{flex:1}
+.avatar{width:64px;height:64px;border-radius:50%;object-fit:cover;flex:none;background:#2a1a4a;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:26px;color:#fff}
+.avatar.sm{width:40px;height:40px;font-size:16px}.avatar.lg{width:84px;height:84px;font-size:34px}
+.vhead{display:flex;gap:14px;align-items:center}.vhead .bio{margin:6px 0 0;color:#d9d0f0;white-space:pre-wrap;overflow-wrap:anywhere}
+.frow .meta2{flex:1;min-width:0}.frow .meta2 b{display:block}.frow .meta2 small{display:block;overflow-wrap:anywhere}
+.inline button{flex:none}
+
+.badge[hidden]{display:none}
+
+/* ---- pick of the day ---- */
+.potd{margin-bottom:16px;padding:14px;border:1px solid #7a5a10;border-radius:16px;background:linear-gradient(160deg,#2c2108,#150e24 70%);box-shadow:0 0 30px #ffc83d14}
+.potd .lbl{font-size:11px;letter-spacing:.2em;color:var(--gold);margin-bottom:8px}
+.potdbody{display:flex;gap:14px;align-items:flex-start}
+.potdbody img{width:96px;height:144px;object-fit:cover;border-radius:10px;flex:none;background:#1a1130;box-shadow:0 0 0 2px #ffc83d55}
+.potdbody h3{margin:0 0 2px;font-size:20px}.potdbody .why{margin:2px 0;color:var(--cyan);font-size:13px}
+.potdbody .ov{margin:6px 0 10px;color:#d9d0f0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.potdbody .row{margin:0}
+.tastechips{margin:12px 0}.tastechips .chip{font-size:14px;padding:6px 14px}
+.tastesline{margin:10px 0;color:var(--muted);font-size:13px}.tastesline b{color:var(--text)}
+.tasteline-chips{color:var(--cyan)}
+@media (max-width:900px){.potdbody{flex-direction:row}.potdbody img{width:78px;height:117px}}

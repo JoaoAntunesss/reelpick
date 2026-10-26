@@ -60,3 +60,14 @@ export function buildStrip(pool, winner, len = 40, winIdx = 34, first = null) {
   if (first) out[2] = first;
   return out;
 }
+
+/** Genre ids of one type's list that match the chosen taste names. Handles TMDB names like "Action & Adventure" and "Sci-Fi & Fantasy". */
+export function tasteGenreIds(names, list) {
+  const norm = (n) => { const x = String(n).trim().toLowerCase(); return x === "sci-fi" ? "science fiction" : x; };
+  const want = new Set(names.map(norm));
+  return list.filter((g) => g.name.split(/\s*&\s*/).some((p) => want.has(norm(p)))).map((g) => g.id);
+}
+export function hashStr(s) { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+export function mulberry32(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+/** The person's local calendar day, so the daily pick changes at their midnight. */
+export const dayKey = (d = new Date()) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");

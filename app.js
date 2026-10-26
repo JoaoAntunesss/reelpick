@@ -1,6 +1,8 @@
-import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle } from "./query.js";
+import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle, tasteGenreIds, hashStr, mulberry32, dayKey } from "./query.js";
 import { DEMO, DEMO_GENRES } from "./demo.js";
 import { supported, createReel3D } from "./reel3d.js";
+import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES } from "./seen.js";
+import { initSocial } from "./social.js";
 
 const $ = (id) => document.getElementById(id);
 const store = {
@@ -18,21 +20,36 @@ let key = store.get("rp_key");
 let demo = !key;
 let genreList = [];            // [{name, movie, tv}]
 let providerList = [];         // [{id, name, logo}]
-const seen = new Map();   // "type:id" -> {id,type,title,year,poster}
+const seen = new Map();   // "type:id" -> {id,type,title,year,poster,rating,review,updatedAt}
 try {
-  JSON.parse(store.get("rp_seen", "[]") || "[]").forEach((x) => { if (typeof x === "string") { const [t, i] = x.split(":"); seen.set(x, { type: t, id: Number(i), title: "Unknown title", year: "", poster: null }); } else if (x && x.type && x.id) seen.set(x.type + ":" + x.id, x); });
+  JSON.parse(store.get("rp_seen", "[]") || "[]").forEach((x) => { if (typeof x === "string") { const [t, i] = x.split(":"); const o = sanitizeItem({ type: t, id: Number(i), title: "Unknown title" }); if (o) seen.set(x, o); } else { const o = sanitizeItem(x); if (o) seen.set(keyOf(o), o); } });
 } catch (e) { /* start empty */ }
+let social = { enabled: false, signedIn: () => false, upsert() {}, remove() {}, pushMany() {}, pin: async () => {} };
 const saveSeen = () => { store.set("rp_seen", JSON.stringify([...seen.values()])); $("seenBtn").textContent = "My seen list (" + seen.size + ")"; };
-function markSeen(it) { seen.set(it.type + ":" + it.id, { id: it.id, type: it.type, title: it.title, year: it.year || "", poster: it.poster || null }); saveSeen(); }
+function markSeen(it) {
+  const k = it.type + ":" + it.id, old = seen.get(k) || {};
+  const item = sanitizeItem({ ...old, id: it.id, type: it.type, title: it.title, year: it.year || old.year, poster: it.poster || old.poster, updatedAt: Date.now() });
+  seen.set(k, item); saveSeen(); social.upsert(item); return k;
+}
+let editing = null;
+function openEditor(k) {
+  const it = seen.get(k); if (!it) return; editing = k;
+  $("eTitle").textContent = it.title + (it.year ? " (" + it.year + ")" : "");
+  $("eReview").value = it.review || ""; $("ePinText").value = ""; paintStars(it.rating || 0); $("seenEdit").hidden = false; $("seenEdit").dataset.rating = it.rating || 0;
+  $("ePinBox").hidden = !social.signedIn(); $("seenEdit").scrollIntoView({ block: "nearest" });
+}
+function paintStars(n) { $("seenEdit").dataset.rating = n; [...$("eStars").children].forEach((b, i) => b.classList.toggle("on", i < n)); }
 function renderSeen() {
   const g = $("seenGrid"); g.replaceChildren();
   if (!seen.size) { g.appendChild(el("p", null, "Nothing here yet. Press “Seen it — spin again” on a result to add it.")); return; }
   [...seen.entries()].reverse().forEach(([k, it]) => {
-    const d = el("div", "sitem");
-    if (it.poster) { const i = el("img"); i.src = it.poster; i.alt = it.title; i.loading = "lazy"; d.appendChild(i); d.appendChild(el("div", "cap", it.title)); }
+    const d = el("div", "sitem cl"); d.tabIndex = 0; d.setAttribute("role", "button"); d.setAttribute("aria-label", "Rate or review " + it.title);
+    if (it.poster) { const i = el("img"); i.src = it.poster; i.alt = ""; i.loading = "lazy"; d.appendChild(i); d.appendChild(el("div", "cap", it.title)); }
     else d.appendChild(el("div", "ph", it.title + (it.year ? " (" + it.year + ")" : "")));
+    if (it.rating) d.appendChild(el("div", "rt", "★ " + it.rating));
     const x = el("button", null, "×"); x.type = "button"; x.title = "Remove from seen"; x.setAttribute("aria-label", "Remove " + it.title + " from seen list");
-    x.onclick = () => { seen.delete(k); saveSeen(); renderSeen(); };
+    x.onclick = (ev) => { ev.stopPropagation(); seen.delete(k); saveSeen(); social.remove(k); if (editing === k) $("seenEdit").hidden = true; renderSeen(); };
+    d.onclick = () => openEditor(k); d.onkeydown = (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openEditor(k); } };
     d.appendChild(x); g.appendChild(d);
   });
 }
@@ -120,6 +137,14 @@ function initStatic() {
   soundLabel();
   $("spin").onclick = () => spin();
   $("seen").onclick = () => { if (current) markSeen(current); spin(); };
+  $("rRate").onclick = () => { if (!current) return; const k = markSeen(current); renderSeen(); $("seenClear").textContent = "Clear all"; $("seenDlg").showModal(); openEditor(k); };
+  for (let i = 1; i <= 5; i++) { const b = el("button", null, "★"); b.type = "button"; b.setAttribute("aria-label", i + " star" + (i > 1 ? "s" : "")); b.onclick = () => paintStars(Number($("seenEdit").dataset.rating) === i ? 0 : i); $("eStars").appendChild(b); }
+  $("eSave").onclick = () => {
+    const it = seen.get(editing); if (!it) return; const r = Number($("seenEdit").dataset.rating) || null;
+    const item = sanitizeItem({ ...it, rating: r, review: $("eReview").value.trim(), updatedAt: Date.now() }); seen.set(editing, item); saveSeen(); social.upsert(item); renderSeen(); say("Saved.");
+  };
+  $("eClose").onclick = () => { $("seenEdit").hidden = true; editing = null; };
+  $("ePin").onclick = async () => { const it = seen.get(editing); if (it) await social.pin(it, $("ePinText").value.trim()); };
   saveSeen();
   $("seenBtn").onclick = () => { renderSeen(); $("seenClear").textContent = "Clear all"; $("seenDlg").showModal(); };
   $("seenClear").onclick = () => { if ($("seenClear").textContent === "Clear all") { $("seenClear").textContent = "Click again to confirm"; return; } seen.clear(); saveSeen(); renderSeen(); $("seenClear").textContent = "Clear all"; };
@@ -131,7 +156,8 @@ function initStatic() {
   $("seenFile").onchange = async () => {
     try {
       const list = JSON.parse(await $("seenFile").files[0].text());
-      let n = 0; (Array.isArray(list) ? list : []).forEach((x) => { if (x && (x.type === "movie" || x.type === "tv") && Number.isFinite(x.id)) { seen.set(x.type + ":" + x.id, { id: x.id, type: x.type, title: String(x.title || "Unknown title").slice(0, 200), year: String(x.year || "").slice(0, 4), poster: typeof x.poster === "string" && x.poster.startsWith("https://image.tmdb.org/") ? x.poster : null }); n++; } });
+      let n = 0; const added = []; (Array.isArray(list) ? list : []).forEach((x) => { const o = sanitizeItem(x); if (o) { const k = keyOf(o), cur = seen.get(k); if (!cur || o.updatedAt >= cur.updatedAt) { seen.set(k, o); added.push(o); } n++; } });
+      social.pushMany(added);
       saveSeen(); renderSeen(); say("Imported " + n + " titles.");
     } catch (e) { say("That file is not a valid ReelPick list."); }
     $("seenFile").value = "";
@@ -274,9 +300,89 @@ async function showResult(it) {
   $("result").scrollIntoView({ block: "nearest", behavior: reduced() ? "auto" : "smooth" });
 }
 
+// ------------------------------------------------------------------ tastes + pick of the day
+let tastes = { genres: [], type: "both" };
+try { tastes = sanitizeTastes(JSON.parse(store.get("rp_tastes", "{}") || "{}")); } catch (e) { /* none yet */ }
+let uidLocal = store.get("rp_uid"); if (!uidLocal) { uidLocal = Math.random().toString(36).slice(2); store.set("rp_uid", uidLocal); }
+const tasteText = () => (tastes.genres.length ? tastes.genres.join(", ") : "not set");
+function setTastes(t, fromCloud) {
+  tastes = sanitizeTastes(t); store.set("rp_tastes", JSON.stringify(tastes));
+  if ($("pTastes")) $("pTastes").textContent = tasteText();
+  if (!fromCloud) social.setTastes && social.setTastes(tastes);
+  dailyPick(true);
+}
+let draft = null;
+function openTastes() {
+  draft = { genres: new Set(tastes.genres), type: tastes.type };
+  const paint = () => {
+    $("tasteChips").replaceChildren(...TASTE_GENRES.map((g) => { const b = el("button", "chip" + (draft.genres.has(g) ? " on" : ""), g); b.type = "button"; b.setAttribute("aria-pressed", draft.genres.has(g));
+      b.onclick = () => { if (draft.genres.has(g)) draft.genres.delete(g); else if (draft.genres.size < 8) draft.genres.add(g); else say("Up to 8 genres."); paint(); }; return b; }));
+    document.querySelectorAll("#tasteType button").forEach((b) => b.classList.toggle("on", b.dataset.v === draft.type));
+    $("tasteCount").textContent = draft.genres.size + " of 8 selected";
+  };
+  document.querySelectorAll("#tasteType button").forEach((b) => { b.onclick = () => { draft.type = b.dataset.v; paint(); }; });
+  paint(); $("tastesDlg").showModal();
+}
+$("tasteSave").onclick = () => setTastes({ genres: [...draft.genres], type: draft.type });
+
+const genreCache = {};
+async function genreIdsFor(type) {
+  if (!genreCache[type]) { const r = await tmdb("/genre/" + type + "/list", new URLSearchParams({ language: "en-US" })); genreCache[type] = r.genres; }
+  return tasteGenreIds(tastes.genres, genreCache[type]);
+}
+async function pickDaily(rng) {
+  const type = tastes.type === "both" ? (rng() < 0.5 ? "movie" : "tv") : tastes.type;
+  let list;
+  if (demo) {
+    list = DEMO.filter((x) => x.type === type && x.genres.some((g) => tastes.genres.includes(g))).map((x) => ({ ...x, poster: null }));
+    if (!list.length) list = DEMO.filter((x) => x.genres.some((g) => tastes.genres.includes(g))).map((x) => ({ ...x, poster: null }));
+  } else {
+    const ids = await genreIdsFor(type);
+    const q = buildParams(type, { genres: { movie: type === "movie" ? ids : [], tv: type === "tv" ? ids : [] }, matchAll: false, providers: [], style: "any", minRating: 6.5, language: "en-US" });
+    q.set("vote_count.gte", type === "movie" ? "1000" : "300");
+    const page = 1 + Math.floor(rng() * 8);
+    let data = await tmdb("/discover/" + type, new URLSearchParams([...q, ["page", String(page)]]));
+    if (!data.results.length) data = await tmdb("/discover/" + type, new URLSearchParams([...q, ["page", "1"]]));
+    list = data.results.map((x) => norm(x, type)).filter((x) => x.poster);
+  }
+  list = list.filter((x) => !seen.has(x.type + ":" + x.id));
+  return list.length ? list[Math.floor(rng() * list.length)] : null;
+}
+async function dailyPick(force) {
+  const box = $("potdBody"); box.replaceChildren();
+  if (!tastes.genres.length) {
+    const d = el("div"); d.appendChild(el("p", null, "Tell us what you like and get a new pick every day, chosen for you."));
+    const b = el("button", null, "Choose my tastes"); b.type = "button"; b.onclick = openTastes; d.appendChild(b); box.appendChild(d); return;
+  }
+  const day = dayKey(), n = Number(store.get("rp_potd_n_" + day, "0"));
+  const seedKey = [day, n, tastes.genres.join(","), tastes.type, demo ? "demo" : "tmdb", uidLocal].join("|");
+  let item = null;
+  try { const c = JSON.parse(store.get("rp_potd", "null")); if (!force && c && c.seedKey === seedKey && !seen.has(c.item.type + ":" + c.item.id)) item = c.item; } catch (e) { /* recompute */ }
+  if (!item) {
+    box.appendChild(el("p", "hint", "Choosing today's pick…"));
+    try { item = await pickDaily(mulberry32(hashStr(seedKey))); } catch (e) { box.replaceChildren(el("p", "hint", e.message || "Could not load today's pick.")); return; }
+    if (item) store.set("rp_potd", JSON.stringify({ seedKey, item }));
+  }
+  box.replaceChildren();
+  if (!item) { box.appendChild(el("p", "hint", "No new suggestion for these tastes right now. Try other genres or clear your seen list.")); const b = el("button", "ghost", "Change my tastes"); b.type = "button"; b.onclick = openTastes; box.appendChild(b); return; }
+  if (item.poster) { const i = el("img"); i.src = item.poster; i.alt = ""; box.appendChild(i); }
+  const d = el("div"); d.appendChild(el("h3", null, item.title));
+  d.appendChild(el("div", "meta", [item.year, item.type === "tv" ? "Series" : "Movie", item.rating ? "★ " + Number(item.rating).toFixed(1) : ""].filter(Boolean).join(" · ")));
+  d.appendChild(el("div", "why", "Because you like " + tastes.genres.slice(0, 3).join(", ")));
+  d.appendChild(el("p", "ov", item.overview || ""));
+  const row = el("div", "row");
+  const tr = el("a", "btn", "Watch trailer"); tr.href = "https://www.youtube.com/results?search_query=" + encodeURIComponent(item.title + " " + item.year + " trailer"); tr.target = "_blank"; tr.rel = "noopener noreferrer";
+  const sn = el("button", "ghost", "Seen it"); sn.type = "button"; sn.onclick = () => { markSeen(item); store.set("rp_potd_n_" + day, String(n + 1)); dailyPick(true); };
+  const an = el("button", "ghost", "Another pick"); an.type = "button"; an.onclick = () => { store.set("rp_potd_n_" + day, String(n + 1)); dailyPick(true); };
+  const tb = el("button", "ghost", "My tastes"); tb.type = "button"; tb.onclick = openTastes;
+  row.append(tr, sn, an, tb); d.appendChild(row); box.appendChild(d);
+}
+
 // ------------------------------------------------------------------ start
 initStatic();
 await loadMeta();
 // first paint: posters on the reel so the machine does not look empty
 reel.idle(shuffle(DEMO.map((x) => ({ ...x, poster: null }))));
+social = await initSocial({ $, el, seen, saveSeen, renderSeen, say, tastes: { get: () => tastes, set: (t) => setTastes(t, true) }, onNewProfile: openTastes, openTastes });
+dailyPick(false);
 window.__rp = { state, spin, isDemo: () => demo, reel: () => reel };

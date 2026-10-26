@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildParams, commonGenres, buildStrip } from "../query.js";
+import { buildParams, commonGenres, buildStrip, tasteGenreIds, hashStr, mulberry32, dayKey } from "../query.js";
 
 const base = { genres: { movie: [], tv: [] }, providers: [], region: "PT", style: "any", minRating: 0 };
 
@@ -50,4 +50,20 @@ test("strip puts the winner at the index and previous winner first", () => {
   assert.equal(strip.length, 40);
   assert.equal(strip[34].id, 3);
   assert.equal(strip[2].id, 1);
+});
+
+test("taste names match movie and tv genre lists", () => {
+  const tv = [{ id: 10759, name: "Action & Adventure" }, { id: 10765, name: "Sci-Fi & Fantasy" }, { id: 35, name: "Comedy" }, { id: 18, name: "Drama" }];
+  assert.deepEqual(tasteGenreIds(["Science Fiction"], tv), [10765]);
+  assert.deepEqual(tasteGenreIds(["Adventure", "Comedy"], tv).sort(), [10759, 35]);
+  assert.deepEqual(tasteGenreIds(["Horror"], tv), []);
+  assert.deepEqual(tasteGenreIds(["comedy"], [{ id: 35, name: "Comedy" }]), [35]);
+});
+
+test("daily pick is deterministic for the same seed", () => {
+  const a = mulberry32(hashStr("2026-10-26|Horror|abc")), b = mulberry32(hashStr("2026-10-26|Horror|abc")), c = mulberry32(hashStr("2026-10-27|Horror|abc"));
+  const xs = [a(), a(), a()], ys = [b(), b(), b()];
+  assert.deepEqual(xs, ys); assert.notEqual(xs[0], c());
+  xs.forEach((v) => assert.ok(v >= 0 && v < 1));
+  assert.equal(dayKey(new Date(2026, 9, 6)), "2026-10-06");
 });

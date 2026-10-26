@@ -21,7 +21,22 @@ One discover request finds how many pages match, a random page is fetched, and o
 Titles with no poster are skipped. Pages beyond TMDB's 500-page limit are never reached.
 
 ## Tests
-    node --test tests/
+    node --test tests/*.test.mjs
 
 ## Credits
 This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data provided by JustWatch via TMDB.
+
+## Optional: accounts, friends and reviews (free)
+
+Without setup, ReelPick works locally (your seen list lives in your browser). To enable Google sign-in, reviews, friends, profiles and the pick of the day synced across devices, use Firebase's free **Spark** plan (no card needed):
+
+1. Create a project at <https://console.firebase.google.com>, add a **Web app** and copy its config.
+2. *Authentication* › *Sign-in method* › enable **Google**. Under *Settings* › *Authorized domains* add your Pages domain (e.g. `joaoantunesss.github.io`).
+3. *Firestore Database* › create a database, then paste the contents of `firestore.rules` in the *Rules* tab and publish.
+4. Paste the config into `firebase-config.js` (it is not a secret; access is enforced by the rules).
+
+Notes
+- Profiles are **friends-only by default**; each person can choose private, friends or public. Only nickname-based discovery is public; friends are made through requests that the other person accepts.
+- Profile photos are resized to 160×160 and stored inside the profile (Firebase Storage needs a paid plan, so it is not used).
+- On first sign-in you choose your tastes; the **Pick of the day** is a daily suggestion (one per day, "Another pick" to reroll) based on them.
+- Free-tier quotas are generous for personal use, but this was tested only with mocks: review `firestore.rules` before going public.

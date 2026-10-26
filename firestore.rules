@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+    function pairId(a, b) { return a < b ? a + '_' + b : b + '_' + a; }
+    function isFriend(uid) { return signedIn() && exists(/databases/$(database)/documents/friendships/$(pairId(request.auth.uid, uid))); }
+    function profileOf(uid) { return get(/databases/$(database)/documents/users/$(uid)).data; }
+    // Who may read someone's profile and watched list: the owner, accepted friends (if visibility is friends/public), anyone signed in (if public).
+    function canView(uid) {
+      return isOwner(uid) || (signedIn() && (profileOf(uid).visibility == 'public' || (profileOf(uid).visibility == 'friends' && isFriend(uid))));
+    }
+
+    function validPinned(p) {
+      return p is map
+        && p.keys().hasOnly(['type', 'id', 'title', 'year', 'poster', 'text'])
+        && p.type in ['movie', 'tv'] && p.id is int
+        && p.title is string && p.title.size() <= 200
+        && p.text is string && p.text.size() <= 280
+        && (p.poster == null || (p.poster is string && p.poster.size() <= 200 && p.poster.matches('^https://image\\.tmdb\\.org/.*')));
+    }
+    function validProfile(d) {
+      return d.keys().hasOnly(['name', 'handle', 'photo', 'bio', 'visibility', 'pinned', 'tastes', 'updatedAt'])
+        && d.name is string && d.name.size() <= 40
+        && d.visibility in ['private', 'friends', 'public']
+        && (!('handle' in d) || d.handle == null || (d.handle is string && d.handle.matches('^[a-z0-9_]{3,20}$')))
+        && (!('bio' in d) || (d.bio is string && d.bio.size() <= 300))
+        && (!('photo' in d) || d.photo == null || (d.photo is string && d.photo.size() <= 24000 && d.photo.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]+$')))
+        && (!('pinned' in d) || d.pinned == null || validPinned(d.pinned))
+        && (!('tastes' in d) || d.tastes == null || (d.tastes is map && d.tastes.keys().hasOnly(['genres', 'type']) && d.tastes.genres is list && d.tastes.genres.size() <= 8 && d.tastes.type in ['movie', 'tv', 'both']));
+    }
+    function validSeen(d) {
+      return d.keys().hasOnly(['type', 'id', 'title', 'year', 'poster', 'rating', 'review', 'updatedAt'])
+        && d.keys().hasAll(['type', 'id', 'title', 'updatedAt'])
+        && d.type in ['movie', 'tv'] && d.id is int
+        && d.title is string && d.title.size() <= 200
+        && (!('year' in d) || (d.year is string && d.year.size() <= 4))
+        && (!('poster' in d) || d.poster == null || (d.poster is string && d.poster.size() <= 200 && d.poster.matches('^https://image\\.tmdb\\.org/.*')))
+        && (!('rating' in d) || d.rating == null || (d.rating is int && d.rating >= 1 && d.rating <= 5))
+        && (!('review' in d) || (d.review is string && d.review.size() <= 600))
+        && d.updatedAt is number;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || (signedIn() && (resource.data.visibility == 'public' || (resource.data.visibility == 'friends' && isFriend(uid))));
+      allow create, update: if isOwner(uid) && validProfile(request.resource.data);
+      allow delete: if isOwner(uid);
+
+      // Watched titles with rating and review.
+      match /seen/{key} {
+        allow read: if canView(uid);
+        allow create, update: if isOwner(uid) && validSeen(request.resource.data);
+        allow delete: if isOwner(uid);
+      }
+    }
+
+    // Nickname -> uid lookup (also used by the search box). A nickname can be claimed once and never overwritten.
+    match /handles/{handle} {
+      allow read: if signedIn();
+      allow create: if signedIn() && handle.matches('^[a-z0-9_]{3,20}$')
+        && request.resource.data.keys().hasOnly(['uid']) && request.resource.data.uid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // Friend requests: visible only to the two people involved. The recipient accepts or declines.
+    match /requests/{id} {
+      allow read: if signedIn() && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['from', 'to', 'fromName', 'fromHandle', 'toHandle', 'createdAt'])
+        && request.resource.data.from == request.auth.uid && request.resource.data.to is string && request.resource.data.to != request.auth.uid
+        && id == request.auth.uid + '_' + request.resource.data.to
+        && request.resource.data.fromName is string && request.resource.data.fromName.size() <= 40
+        && request.resource.data.fromHandle is string && request.resource.data.fromHandle.size() <= 20
+        && request.resource.data.toHandle is string && request.resource.data.toHandle.size() <= 20
+        && request.resource.data.createdAt is number;
+      allow delete: if signedIn() && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+    }
+
+    // A friendship exists only if the other person had sent a request that this person accepts.
+    match /friendships/{pair} {
+      allow read: if signedIn() && (resource.data.a == request.auth.uid || resource.data.b == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['a', 'b', 'ha', 'na', 'hb', 'nb', 'createdAt'])
+        && request.resource.data.ha is string && request.resource.data.ha.size() <= 20 && request.resource.data.hb is string && request.resource.data.hb.size() <= 20
+        && request.resource.data.na is string && request.resource.data.na.size() <= 40 && request.resource.data.nb is string && request.resource.data.nb.size() <= 40
+        && request.resource.data.a < request.resource.data.b
+        && pair == request.resource.data.a + '_' + request.resource.data.b
+        && (request.auth.uid == request.resource.data.a || request.auth.uid == request.resource.data.b)
+        && exists(/databases/$(database)/documents/requests/$((request.auth.uid == request.resource.data.a ? request.resource.data.b : request.resource.data.a) + '_' + request.auth.uid));
+      allow delete: if signedIn() && (resource.data.a == request.auth.uid || resource.data.b == request.auth.uid);
+    }
+  }
+}

@@ -13,6 +13,13 @@
 <header class="top">
   <h1><span class="bulb"></span>REELPICK<span class="bulb"></span></h1>
   <p>Can't decide what to watch? Set your filters and pull the lever.</p>
+  <div id="account" class="account" hidden>
+    <button id="signIn">Sign in with Google</button>
+    <span id="who" hidden></span>
+    <button id="friendsBtn" hidden>People<span id="reqBadge" class="badge" hidden></span></button>
+    <button id="profileBtn" hidden>My profile</button>
+    <button id="signOut" class="ghost" hidden>Sign out</button>
+  </div>
   <p><a href="#howto" class="toplink">How to get your free key &amp; how to use it</a></p>
 </header>
 
@@ -52,6 +59,10 @@
   </aside>
 
   <section class="machine" aria-label="Slot machine">
+    <section id="potd" class="potd" aria-label="Pick of the day">
+      <div class="lbl">PICK OF THE DAY</div>
+      <div id="potdBody" class="potdbody"></div>
+    </section>
     <div class="cabinet">
       <div class="lights" aria-hidden="true"></div>
       <div class="window">
@@ -76,6 +87,7 @@
         <div id="rProviders" class="rprov"></div>
         <div class="row">
           <a id="rTrailer" class="btn" target="_blank" rel="noopener noreferrer">Watch trailer</a>
+          <button id="rRate" class="ghost">I've watched it — rate</button>
           <button id="seen" class="ghost">Seen it — spin again</button>
         </div>
       </div>
@@ -117,6 +129,17 @@
     <h3>My seen list</h3>
     <p class="hint">Titles you marked as seen are never picked again. The list lives in this browser only, so use Export to keep a backup or move it to another device.</p>
     <div id="seenGrid" class="seengrid"></div>
+    <div id="seenEdit" class="edit" hidden>
+      <h4 id="eTitle"></h4>
+      <div id="eStars" class="stars" role="group" aria-label="Your rating"></div>
+      <label class="sr" for="eReview">Your review</label>
+      <textarea id="eReview" maxlength="600" rows="3" placeholder="Your review (optional, up to 600 characters)"></textarea>
+      <div id="ePinBox" class="pinbox" hidden>
+        <input id="ePinText" maxlength="280" placeholder="Pin it on your profile: why should people watch it? (optional)">
+        <button type="button" id="ePin">Pin as my recommendation</button>
+      </div>
+      <div class="row"><button type="button" id="eSave">Save</button><button type="button" id="eClose" class="ghost">Close editor</button></div>
+    </div>
     <div class="row">
       <button type="button" id="seenExport">Export</button>
       <button type="button" id="seenImport">Import</button>
@@ -126,6 +149,74 @@
     </div>
   </form>
 </dialog>
+
+<dialog id="tastesDlg" class="wide">
+  <form method="dialog">
+    <h3>What do you like?</h3>
+    <p class="hint">Pick up to 8 genres. ReelPick uses them for your pick of the day, and your friends see them on your profile.</p>
+    <div class="seg" id="tasteType" role="group" aria-label="Movies or series"><button type="button" data-v="movie">Movies</button><button type="button" data-v="tv">Series</button><button type="button" data-v="both" class="on">Both</button></div>
+    <div id="tasteChips" class="chips tastechips"></div>
+    <p id="tasteCount" class="hint"></p>
+    <div class="row"><button value="save" id="tasteSave">Save my tastes</button><button value="close" class="ghost">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="profileDlg" class="wide">
+  <form method="dialog">
+    <h3>My profile</h3>
+    <div class="phead">
+      <div id="pAvatar"></div>
+      <div class="col">
+        <span class="inline"><button type="button" id="pPhotoBtn">Upload photo</button><button type="button" id="pPhotoDel" class="ghost">Remove</button></span>
+        <input type="file" id="pPhotoFile" accept="image/*" hidden>
+        <p class="hint">Resized in your browser to a small square and stored in your profile (no paid storage).</p>
+      </div>
+    </div>
+    <label>Display name <input id="pName" maxlength="40" autocomplete="off"></label>
+    <label>Nickname (people find you with it)
+      <span class="inline"><input id="pHandle" maxlength="20" autocomplete="off" placeholder="e.g. joao_99"><button type="button" id="pHandleSave">Save nickname</button></span>
+    </label>
+    <p class="hint">3 to 20 letters, numbers or _ . Nicknames are unique.</p>
+    <div class="tastesline"><b>My tastes:</b> <span id="pTastes"></span> <button type="button" id="pTastesBtn" class="ghost">Change</button></div>
+    <label>About me <textarea id="pBio" maxlength="300" rows="3" placeholder="Tell people about your taste in movies and series (up to 300 characters)"></textarea></label>
+    <label>Who can see my profile, list, ratings and reviews
+      <select id="pVis"><option value="private">Only me</option><option value="friends">My friends (people I accepted)</option><option value="public">Any signed-in person who knows my nickname</option></select>
+    </label>
+    <label>Share link <span class="inline"><input id="pLink" readonly><button type="button" id="pCopy">Copy</button></span></label>
+    <h4>Pinned recommendation</h4>
+    <div id="pPinned" class="pinned"></div>
+    <p class="hint"><b>What is stored:</b> display name, nickname, photo, about me, watched list, ratings and reviews, in Google Firebase. Your email is never shown to anyone. Strangers only see your nickname. You can delete everything below.</p>
+    <div class="row"><button value="save" id="pSave">Save</button><button type="button" id="pDelete" class="ghost">Delete my account and data</button><button value="close" class="ghost">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="friendsDlg" class="wide">
+  <form method="dialog">
+    <h3>People</h3>
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab sel" id="tFind" role="tab">Find people</button>
+      <button type="button" class="tab" id="tReq" role="tab">Requests</button>
+      <button type="button" class="tab" id="tFr" role="tab">Friends</button>
+    </div>
+    <div id="pplFind">
+      <label class="sr" for="fNick">Search by nickname</label>
+      <span class="inline"><input id="fNick" maxlength="21" autocomplete="off" placeholder="Search by nickname"><button type="button" id="fAdd">Search</button></span>
+    </div>
+    <div id="pplList" class="flist"></div>
+    <div class="row"><button value="close" class="ghost">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="viewDlg" class="wide">
+  <form method="dialog">
+    <div id="vHead" class="vhead"></div>
+    <div id="vPinned"></div>
+    <div class="tabs" role="tablist"><button type="button" id="vTabR" class="tab sel" role="tab">Reviews</button><button type="button" id="vTabC" class="tab" role="tab">Compared with me</button></div>
+    <div id="vBody" class="vbody"></div>
+    <div class="row"><button type="button" id="vAdd" hidden>Add friend</button><button value="close" class="ghost">Close</button></div>
+  </form>
+</dialog>
+
 <dialog id="dlg">
   <form method="dialog">
     <h3>Connect to TMDB (free)</h3>
