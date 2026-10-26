@@ -72,3 +72,20 @@ dialog input{display:block;width:100%;margin-top:4px;background:#0f0a1a;border:1
 @media (max-width:900px){.grid{grid-template-columns:1fr}.window{height:270px}.item{width:130px;height:195px}.result{flex-direction:column;align-items:center;text-align:center}.row{justify-content:center}.rprov{justify-content:center}}
 @media (prefers-reduced-motion:reduce){.bulb,.lights{animation:none}.result{animation:none}}
 .providers .hint{grid-column:1/-1;margin:0}
+
+.window.has3d{height:min(62vw,430px);background:radial-gradient(ellipse at 50% 40%,#2a0f4a,#05030a 70%)}
+.window.has3d .strip,.window.has3d .payline,.window.has3d .shade{display:none}
+
+.result.flip img{animation:flipIn .9s cubic-bezier(.2,.8,.2,1) both;backface-visibility:hidden}
+.result.flip .info>*{animation:fadeUp .5s both}
+.result.flip .info>*:nth-child(1){animation-delay:.35s}.result.flip .info>*:nth-child(2){animation-delay:.42s}.result.flip .info>*:nth-child(3){animation-delay:.49s}
+.result.flip .info>*:nth-child(4){animation-delay:.56s}.result.flip .info>*:nth-child(5){animation-delay:.63s}.result.flip .info>*:nth-child(6){animation-delay:.7s}
+@keyframes flipIn{from{transform:perspective(700px) rotateY(100deg) scale(.8);box-shadow:0 0 40px #ffc83d}to{transform:none}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}}
+.result{perspective:900px}
+@media (prefers-reduced-motion:reduce){.result.flip img,.result.flip .info>*{animation:none}}
+
+.toplink{color:var(--cyan)}
+.howto{max-width:1200px;margin:10px auto;padding:20px;background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--line);border-radius:16px;scroll-margin-top:12px}
+.howto h2{font-size:15px;color:var(--gold);margin:14px 0 6px}.howto h2:first-child{margin-top:0}
+.howto li{margin:6px 0}.howto a{color:var(--cyan)}.howto p,.howto li{max-width:80ch}

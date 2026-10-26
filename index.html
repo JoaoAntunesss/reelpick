@@ -6,12 +6,14 @@
 <title>ReelPick — spin for something to watch</title>
 <meta name="description" content="Pick genres, your streaming platforms and a vibe, then spin the slot machine for a random movie or series.">
 <link rel="icon" href="data:,">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="top">
   <h1><span class="bulb"></span>REELPICK<span class="bulb"></span></h1>
   <p>Can't decide what to watch? Set your filters and pull the lever.</p>
+  <p><a href="#howto" class="toplink">How to get your free key &amp; how to use it</a></p>
 </header>
 
 <main class="grid">
@@ -81,6 +83,30 @@
   </section>
 </main>
 
+
+<section id="howto" class="howto" aria-labelledby="howtoH">
+  <h2 id="howtoH">How to get your free TMDB key</h2>
+  <p>ReelPick gets its movies, series and streaming info from TMDB, a free database. Each person uses their own free key, so nothing is paid and nothing is shared. It takes about two minutes, once.</p>
+  <ol>
+    <li><b>Create an account.</b> Go to <a href="https://www.themoviedb.org/signup" target="_blank" rel="noopener noreferrer">themoviedb.org/signup</a> and confirm your email.</li>
+    <li><b>Ask for an API key.</b> Open <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener noreferrer">Settings › API</a>, choose to create a key for personal (non-commercial) use, accept the terms and fill in the short form (any app name, e.g. “ReelPick”, and a one-line description).</li>
+    <li><b>Copy the token.</b> On that same page, copy the long <i>API Read Access Token</i>. (The short “API Key” also works.)</li>
+    <li><b>Paste it here.</b> Click <i>TMDB key…</i> at the bottom of this page, paste it and press Save. The demo banner disappears and the platform logos for your country show up.</li>
+  </ol>
+  <p class="hint">Your key stays in this browser only and is sent only to TMDB. Never put it in a public file or share a screenshot of it.</p>
+
+  <h2>How to use it</h2>
+  <ol>
+    <li>Pick <b>Movies, Series or Both</b>.</li>
+    <li>Tick the <b>genres</b> you fancy (none = any). “Must match all” keeps only titles with every selected genre.</li>
+    <li>Choose your <b>country</b>, then tap the <b>streaming platforms you have</b>. Only titles included in those subscriptions are picked.</li>
+    <li>Choose a <b>style</b> (hidden gems, classics, recent…) and a minimum rating if you want.</li>
+    <li>Press <b>SPIN</b> or pull the <b>lever</b>. The reel slows down on a random title.</li>
+    <li>Not into it? <b>Seen it — spin again</b> remembers it and never shows it again (reset in the footer).</li>
+  </ol>
+  <p class="hint">No key yet? The page works in demo mode with a small built-in sample, without platform filters.</p>
+</section>
+
 <footer>
   <p>This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data provided by JustWatch via TMDB.</p>
   <p><button id="keyBtn" class="link">TMDB key…</button> · <button id="clearSeen" class="link">Forget "seen" list</button></p>
@@ -91,7 +117,7 @@
     <h3>Connect to TMDB (free)</h3>
     <ol class="steps">
       <li>Create a free account at themoviedb.org.</li>
-      <li>Open Settings › API and request a key for personal use.</li>
+      <li>Open Settings › API and request a key for personal use. <a href="#howto" onclick="document.getElementById('dlg').close()">Step-by-step guide</a></li>
       <li>Paste the <b>API Read Access Token</b> (or the v3 API key) below.</li>
     </ol>
     <label>Key <input id="keyInput" type="password" autocomplete="off" placeholder="paste your key or token"></label>

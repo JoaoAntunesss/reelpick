@@ -1,5 +1,6 @@
 import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle } from "./query.js";
 import { DEMO, DEMO_GENRES } from "./demo.js";
+import { supported, createReel3D } from "./reel3d.js";
 
 const $ = (id) => document.getElementById(id);
 const store = {
@@ -67,7 +68,8 @@ async function loadMeta() {
 
 function renderFilters() {
   $("banner").hidden = !demo;
-  if (demo) $("banner").textContent = "Demo mode: a small built-in sample. Add a free TMDB key (footer) for every movie and series, plus platform filters.";
+  if (demo) $("banner").textContent = "Demo mode: a small built-in sample. Add a free TMDB key for every movie and series, plus platform filters.";
+  if (demo) { const l = el("a", null, " How to get it"); l.href = "#howto"; $("banner").appendChild(l); }
   const gbox = $("genres"); gbox.replaceChildren();
   genreList.forEach((g) => {
     const b = el("button", "chip" + (state.genres.has(g.name) ? " on" : ""), g.name);
@@ -181,18 +183,30 @@ function animate(strip, winIdx) {
   });
 }
 
+// 2D fallback reel (used when WebGL is not available)
+const domReel = {
+  kind: "dom",
+  idle(items) { $("strip").replaceChildren(...items.slice(0, 12).map(buildItem)); const vw = $("strip").parentElement.clientWidth; $("strip").style.transform = `translateX(${vw / 2 - 10 - 80}px)`; },
+  async spin(pool, winner, prev) {
+    const strip = buildStrip(pool, winner, 40, 34, prev);
+    $("strip").replaceChildren(...strip.map(buildItem));
+    await animate(strip, 34);
+    $("strip").children[34].classList.add("win"); chime();
+  },
+};
+let reel = domReel;
+try { if (supported()) { $("strip").parentElement.classList.add("has3d"); reel = createReel3D($("strip").parentElement, { onTick: click, onWin: chime }); } } catch (e) { $("strip").parentElement.classList.remove("has3d"); reel = domReel; }
+if (reel.setLeverHandler) reel.setLeverHandler(() => spin());
+
 async function spin() {
   if (spinning) return;
-  spinning = true; $("spin").disabled = true; say(""); $("result").hidden = true;
+  spinning = true; $("spin").disabled = true; if (reel.pullLever) reel.pullLever(); say(""); $("result").hidden = true;
   try {
     const { pool, filler } = await candidates();
     const fresh = pool.filter((x) => !seen.has(x.type + ":" + x.id));
     if (!fresh.length) { say(pool.length ? "You've seen everything this filter finds. Clear the “seen” list or relax the filters." : "Nothing matches these filters. Try fewer genres or platforms."); return; }
     const winner = fresh[randInt(fresh.length)];
-    const strip = buildStrip(filler.length ? filler : pool, winner, 40, 34, lastWinner);
-    $("strip").replaceChildren(...strip.map(buildItem));
-    await animate(strip, 34);
-    $("strip").children[34].classList.add("win"); chime();
+    await reel.spin(filler.length ? filler : pool, winner, lastWinner);
     lastWinner = winner; current = winner;
     await showResult(winner);
   } catch (e) { say(e.message || "Something went wrong."); }
@@ -224,17 +238,13 @@ async function showResult(it) {
     pv.appendChild(el("small", null, "included in " + REGIONS[state.region] + " (via JustWatch)"));
   } else if (!demo) pv.appendChild(el("small", null, "Not on a subscription platform in " + REGIONS[state.region] + " right now."));
   $("rTrailer").href = "https://www.youtube.com/results?search_query=" + encodeURIComponent(info.title + " " + info.year + " trailer");
-  $("result").hidden = false;
+  $("result").hidden = false; $("result").classList.remove("flip"); void $("result").offsetWidth; $("result").classList.add("flip");
   $("result").scrollIntoView({ block: "nearest", behavior: reduced() ? "auto" : "smooth" });
 }
 
 // ------------------------------------------------------------------ start
 initStatic();
 await loadMeta();
-// first paint: a calm strip of posters so the machine doesn't look empty
-{
-  const seed = DEMO.map((x) => ({ ...x, poster: null }));
-  $("strip").replaceChildren(...shuffle(seed).slice(0, 12).map(buildItem));
-  const vw = $("strip").parentElement.clientWidth; $("strip").style.transform = `translateX(${vw / 2 - 10 - 80}px)`;
-}
-window.__rp = { state, spin, isDemo: () => demo };
+// first paint: posters on the reel so the machine does not look empty
+reel.idle(shuffle(DEMO.map((x) => ({ ...x, poster: null }))));
+window.__rp = { state, spin, isDemo: () => demo, reel: () => reel };
