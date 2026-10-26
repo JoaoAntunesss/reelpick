@@ -73,7 +73,7 @@ dialog input{display:block;width:100%;margin-top:4px;background:#0f0a1a;border:1
 @media (prefers-reduced-motion:reduce){.bulb,.lights{animation:none}.result{animation:none}}
 .providers .hint{grid-column:1/-1;margin:0}
 
-.window.has3d{height:min(62vw,430px);background:radial-gradient(ellipse at 50% 40%,#2a0f4a,#05030a 70%)}
+.window.has3d{height:auto;aspect-ratio:5/4;max-height:660px;background:radial-gradient(ellipse at 50% 40%,#2a0f4a,#05030a 70%)}
 .window.has3d .strip,.window.has3d .payline,.window.has3d .shade{display:none}
 
 .result.flip img{animation:flipIn .9s cubic-bezier(.2,.8,.2,1) both;backface-visibility:hidden}

@@ -3,6 +3,9 @@
 A slot machine for movies and series. Choose type, genres, the streaming platforms you have and a style, pull the lever,
 and the reel slows down on a random title that matches. Static page, no build step, free.
 
+![Slot machine, idle](docs/slot-idle.png)
+![Jackpot](docs/slot-jackpot.png)
+
 ## Run
 
     python3 -m http.server 8810      # then open http://127.0.0.1:8810
