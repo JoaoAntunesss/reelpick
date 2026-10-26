@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReelPick — spin for something to watch</title>
+<meta name="description" content="Pick genres, your streaming platforms and a vibe, then spin the slot machine for a random movie or series.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <h1><span class="bulb"></span>REELPICK<span class="bulb"></span></h1>
+  <p>Can't decide what to watch? Set your filters and pull the lever.</p>
+</header>
+
+<main class="grid">
+  <aside class="filters" aria-label="Filters">
+    <div id="banner" class="banner" hidden></div>
+
+    <section>
+      <h2>What</h2>
+      <div class="seg" id="typeSeg" role="group" aria-label="Type">
+        <button data-v="movie" class="on">Movies</button><button data-v="tv">Series</button><button data-v="both">Both</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Genres <small>(none = any)</small></h2>
+      <div id="genres" class="chips"></div>
+      <label class="check"><input type="checkbox" id="matchAll"> Must match all selected</label>
+    </section>
+
+    <section>
+      <h2>Your platforms <small>(none = anywhere)</small></h2>
+      <div class="row">
+        <label for="region" class="sr">Country</label>
+        <select id="region"></select>
+      </div>
+      <div id="providers" class="providers"></div>
+    </section>
+
+    <section>
+      <h2>Style</h2>
+      <select id="style" aria-label="Style"></select>
+      <label class="range">Minimum rating: <b id="minRatingLabel">any</b>
+        <input type="range" id="minRating" min="0" max="9" step="0.5" value="0">
+      </label>
+    </section>
+  </aside>
+
+  <section class="machine" aria-label="Slot machine">
+    <div class="cabinet">
+      <div class="lights" aria-hidden="true"></div>
+      <div class="window">
+        <div id="strip" class="strip"></div>
+        <div class="payline" aria-hidden="true"><i></i><i></i></div>
+        <div class="shade l" aria-hidden="true"></div><div class="shade r" aria-hidden="true"></div>
+      </div>
+      <div class="controls">
+        <button id="spin" class="spin">SPIN</button>
+        <button id="sound" class="ghost" aria-pressed="true">Sound: on</button>
+      </div>
+    </div>
+    <div id="msg" class="msg" role="status" aria-live="polite"></div>
+
+    <article id="result" class="result" hidden>
+      <img id="rPoster" alt="" width="150" height="225">
+      <div class="info">
+        <h3 id="rTitle"></h3>
+        <p id="rMeta" class="meta"></p>
+        <p id="rGenres" class="tags"></p>
+        <p id="rOverview"></p>
+        <div id="rProviders" class="rprov"></div>
+        <div class="row">
+          <a id="rTrailer" class="btn" target="_blank" rel="noopener noreferrer">Watch trailer</a>
+          <button id="seen" class="ghost">Seen it — spin again</button>
+        </div>
+      </div>
+    </article>
+  </section>
+</main>
+
+<footer>
+  <p>This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data provided by JustWatch via TMDB.</p>
+  <p><button id="keyBtn" class="link">TMDB key…</button> · <button id="clearSeen" class="link">Forget "seen" list</button></p>
+</footer>
+
+<dialog id="dlg">
+  <form method="dialog">
+    <h3>Connect to TMDB (free)</h3>
+    <ol class="steps">
+      <li>Create a free account at themoviedb.org.</li>
+      <li>Open Settings › API and request a key for personal use.</li>
+      <li>Paste the <b>API Read Access Token</b> (or the v3 API key) below.</li>
+    </ol>
+    <label>Key <input id="keyInput" type="password" autocomplete="off" placeholder="paste your key or token"></label>
+    <p class="hint">It stays in this browser only (localStorage) and is sent only to api.themoviedb.org.</p>
+    <div class="row"><button value="save">Save</button><button value="demo" class="ghost">Use demo</button><button value="cancel" class="ghost">Close</button></div>
+  </form>
+</dialog>
+<script type="module" src="app.js"></script>
+</body>
+</html>
