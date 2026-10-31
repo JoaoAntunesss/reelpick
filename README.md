@@ -3,8 +3,28 @@
 A slot machine for movies and series. Choose type, genres, the streaming platforms you have and a style, pull the lever,
 and the reel slows down on a random title that matches. Static page, no build step, free.
 
-![Slot machine, idle](docs/slot-idle.png)
-![Jackpot](docs/slot-jackpot.png)
+<table>
+<tr>
+<td width="34%"><img src="docs/slot-idle.png" alt="Slot machine, idle"><br><sub>Pull the lever</sub></td>
+<td width="34%"><img src="docs/slot-jackpot.png" alt="Jackpot"><br><sub>Jackpot</sub></td>
+<td width="32%" rowspan="2" align="center"><img src="docs/phone-top.png" alt="ReelPick on a phone" width="200"><br><sub>On a phone</sub></td>
+</tr>
+<tr>
+<td><img src="docs/pick-of-the-day.png" alt="Pick of the day"><br><sub>Pick of the day</sub></td>
+<td><img src="docs/seen.png" alt="Seen list"><br><sub>My seen list</sub></td>
+</tr>
+</table>
+
+<details><summary>More screenshots: friends and profiles</summary>
+<br>
+<table>
+<tr>
+<td width="33%"><img src="docs/people-search.png" alt="Find people"><br><sub>Find people</sub></td>
+<td width="33%"><img src="docs/profile-view.png" alt="A friend's profile"><br><sub>A friend's profile</sub></td>
+<td width="33%"><img src="docs/profile-compare.png" alt="Compare tastes"><br><sub>Compare tastes</sub></td>
+</tr>
+</table>
+</details>
 
 ## Run
 
