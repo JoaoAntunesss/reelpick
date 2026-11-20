@@ -1,8 +1,8 @@
 // Accounts, nicknames, friend requests, profiles and comparison. Does nothing unless firebase-config.js has a config.
-import { isPT } from "./i18n.js?v=1795196790";
-import { icon } from "./icons.js?v=1795196790";
-import { starsText } from "./seen.js?v=1795196790";
-import { sanitizeItem, mergeSeen, compareLists, normalizeHandle, sanitizePinned, validPhoto, sanitizeProfile, buildFeed, timeAgo } from "./seen.js?v=1795196790";
+import { isPT } from "./i18n.js?v=1795196914";
+import { icon } from "./icons.js?v=1795196914";
+import { starsText } from "./seen.js?v=1795196914";
+import { sanitizeItem, mergeSeen, compareLists, normalizeHandle, sanitizePinned, validPhoto, sanitizeProfile, buildFeed, timeAgo } from "./seen.js?v=1795196914";
 
 const stars = (n) => (n ? starsText(n) : "not rated");
 
@@ -30,10 +30,10 @@ export async function initSocial(ctx) {
   const hasTastes = (t) => t && t.genres && t.genres.length;
   const off = { enabled: false, signedIn: () => false, upsert() {}, remove() {}, pushMany() {}, pin: async () => {} };
   let cfg = null;
-  try { cfg = (await import("./firebase-config.js?v=1795196790")).firebaseConfig; } catch (e) { /* no config file */ }
+  try { cfg = (await import("./firebase-config.js?v=1795196914")).firebaseConfig; } catch (e) { /* no config file */ }
   if (!cfg) return off;
   let cloud;
-  try { cloud = await (await import("./cloud.js?v=1795196790")).init(cfg); } catch (e) { console.warn("Cloud unavailable:", e); return off; }
+  try { cloud = await (await import("./cloud.js?v=1795196914")).init(cfg); } catch (e) { console.warn("Cloud unavailable:", e); return off; }
 
   let blocked = new Map();   // uid -> {name, handle}
   const isBlocked = (uid) => blocked.has(uid);
@@ -85,6 +85,7 @@ export async function initSocial(ctx) {
       wasIn = true;
       await loadBlocks();
       try { await syncDown(user); } catch (e) { console.warn(e); say("Signed in, but the cloud could not be read (" + (e.code || e.message) + "). Check the Firestore rules."); }
+      cloud.readSharedKey().then((k) => { if (k && window.rpSharedKey) window.rpSharedKey(k); });
       await loadWants(); paintAccount(); loadFeed(true); startChats(); startNotifs(); if (curTab === "profile") onTab("profile"); paintNotifBtn(); delete lbCache.friends; delete lbCache.all; if (curTab === "top") loadBoard(true);
       const nick = normalizeHandle(new URLSearchParams(location.search).get("p"));
       if (nick && profile) { history.replaceState(null, "", location.pathname + location.hash); const uid = await guard(cloud.findHandle(nick)); if (uid) openProfile(uid, { handle: nick }); else say("Nobody uses the nickname @" + nick + "."); }
@@ -831,7 +832,7 @@ export async function initSocial(ctx) {
 
   return {
     enabled: true, signedIn: () => !!me, onTab, shareWith,
-    isWanted: (k) => wants.has(k), toggleWant, titleFriends,
+    isWanted: (k) => wants.has(k), toggleWant, titleFriends, shareKey: (k) => cloud.shareKey(k),
     seenChanged: () => { feedAt = 0; if (curTab === "profile" && me && prUid === me.uid) renderProfilePage(me.uid); else if (curTab === "feed") setTimeout(() => loadFeed(true), 800); },
     readBackdrops: () => cloud.readBackdrops(), writeBackdrops: (m) => (me ? cloud.writeBackdrops(m) : null),
     upsert: (item) => { if (me) guard(cloud.saveItem(item)); },

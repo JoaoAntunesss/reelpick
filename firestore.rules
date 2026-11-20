@@ -213,6 +213,20 @@ service cloud.firestore {
         && request.resource.data.at is number;
     }
 
+    // A TMDB key shared with every signed-in user. Only the person who shared it can change or remove it.
+    match /meta/tmdb {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.owner == request.auth.uid
+        && request.resource.data.keys().hasOnly(['key', 'owner', 'at'])
+        && request.resource.data.key is string && request.resource.data.key.size() >= 16 && request.resource.data.key.size() <= 400
+        && request.resource.data.at is number;
+      allow update: if signedIn() && resource.data.owner == request.auth.uid && request.resource.data.owner == request.auth.uid
+        && request.resource.data.keys().hasOnly(['key', 'owner', 'at'])
+        && request.resource.data.key is string && request.resource.data.key.size() >= 16 && request.resource.data.key.size() <= 400
+        && request.resource.data.at is number;
+      allow delete: if signedIn() && resource.data.owner == request.auth.uid;
+    }
+
     match /handles/{handle} {
       allow read: if signedIn();
       allow create: if signedIn() && handle.matches('^[a-z0-9_]{3,20}$')

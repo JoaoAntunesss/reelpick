@@ -1,11 +1,11 @@
-import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle, tasteGenreIds, hashStr, mulberry32, dayKey } from "./query.js?v=1795196790";
-import { DEMO, DEMO_GENRES } from "./demo.js?v=1795196790";
-import { supported, createReel3D } from "./reel3d.js?v=1795196790";
-import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES, starsText } from "./seen.js?v=1795196790";
-import { initSocial } from "./social.js?v=1795196790";
-import { startI18n, tmdbLang, isPT, setLang } from "./i18n.js?v=1795196790";
-import { icon } from "./icons.js?v=1795196790";
-import { FILMS, PLAIN, validPath, cacheKey } from "./themes.js?v=1795196790";
+import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle, tasteGenreIds, hashStr, mulberry32, dayKey } from "./query.js?v=1795196914";
+import { DEMO, DEMO_GENRES } from "./demo.js?v=1795196914";
+import { supported, createReel3D } from "./reel3d.js?v=1795196914";
+import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES, starsText } from "./seen.js?v=1795196914";
+import { initSocial } from "./social.js?v=1795196914";
+import { startI18n, tmdbLang, isPT, setLang } from "./i18n.js?v=1795196914";
+import { icon } from "./icons.js?v=1795196914";
+import { FILMS, PLAIN, validPath, cacheKey } from "./themes.js?v=1795196914";
 startI18n();
 { const lb = document.getElementById("langBtn"); if (lb) { lb.textContent = isPT ? "English" : "Português"; lb.lang = isPT ? "en" : "pt-PT"; lb.title = isPT ? "Switch to English" : "Mudar para português"; lb.onclick = () => setLang(isPT ? "en" : "pt"); } }
 
@@ -25,7 +25,7 @@ let key = store.get("rp_key");
 let demo = !key;
 // Shared TMDB access through the AW server, so nobody needs their own key. A personal key still wins if set.
 const PROXY = "https://europe-west1-aw-sites-e31c3.cloudfunctions.net/tmdb";
-let proxy = false;
+let proxy = false, sharedKey = "";   // sharedKey: a key someone shared with every signed-in ReelPick user
 async function checkProxy() {
   if (key) return;
   try { const c = new AbortController(), t = setTimeout(() => c.abort(), 5000); const r = await fetch(PROXY + "?path=/genre/movie/list&language=en-US", { signal: c.signal }); clearTimeout(t); proxy = r.ok; } catch (e) { proxy = false; }
@@ -80,7 +80,8 @@ const say = (t) => {
 
 // ------------------------------------------------------------------ TMDB
 async function tmdb(path, params = new URLSearchParams()) {
-  if (!key && proxy) {
+  const useKey = key || sharedKey;
+  if (!useKey && proxy) {
     const q = new URLSearchParams(params); q.set("path", path);
     const r = await fetch(PROXY + "?" + q);
     if (!r.ok) throw new Error("TMDB error " + r.status + ". Try again.");
@@ -88,7 +89,7 @@ async function tmdb(path, params = new URLSearchParams()) {
   }
   const headers = { accept: "application/json" };
   const p = new URLSearchParams(params);
-  if (key.length > 40) headers.Authorization = "Bearer " + key; else p.set("api_key", key);
+  if (useKey.length > 40) headers.Authorization = "Bearer " + useKey; else p.set("api_key", useKey);
   const r = await fetch(API + path + "?" + p, { headers });
   if (r.status === 401) throw new Error("TMDB rejected the key. Check it in “TMDB key…”.");
   if (!r.ok) throw new Error("TMDB error " + r.status + ". Try again.");
@@ -201,13 +202,20 @@ function initStatic() {
     } catch (e) { say("That file is not a valid ReelPick list."); }
     $("seenFile").value = "";
   };
-  const paintKey = () => { document.querySelector(".keybar").hidden = !key && proxy; $("howto").hidden = !key && proxy; const b = $("keyTop"); b.classList.toggle("ok", !!key); b.textContent = key ? "TMDB connected" : "Add your free TMDB key"; b.title = key ? "Change or remove your key" : "Unlock every movie and series plus platform filters"; };
-  const openKey = () => { $("keyInput").value = key; $("dlg").showModal(); };
+  const paintKey = () => { const shared = !key && (proxy || sharedKey); document.querySelector(".keybar").hidden = !!shared; $("howto").hidden = !!shared;
+    $("keyShareBox").hidden = !(key && social.signedIn && social.signedIn()); const b = $("keyTop"); b.classList.toggle("ok", !!key); b.textContent = key ? "TMDB connected" : "Add your free TMDB key"; b.title = key ? "Change or remove your key" : "Unlock every movie and series plus platform filters"; };
+  const openKey = () => { $("keyInput").value = key; paintKey(); $("dlg").showModal(); };
+  $("keyShare").onclick = async () => {
+    if (!key || !social.shareKey) return;
+    try { await social.shareKey(key); say(isPT ? "Chave partilhada. Quem entrar no ReelPick já pode pesquisar tudo." : "Key shared. Everyone who signs in can now search everything."); }
+    catch (e) { say("Could not share (" + (e.code || e.message) + ")."); }
+  };
+  window.rpPaintKey = paintKey;
   $("keyBtn").onclick = openKey; $("keyTop").onclick = openKey; paintKey();
   $("dlg").addEventListener("close", () => {
     const v = $("dlg").returnValue;
-    if (v === "save") { key = $("keyInput").value.trim(); store.set("rp_key", key); demo = !key && !proxy; paintKey(); state.providers.clear(); say(""); loadMeta(); }
-    else if (v === "demo") { key = ""; store.set("rp_key", ""); demo = !proxy; paintKey(); loadMeta(); }
+    if (v === "save") { key = $("keyInput").value.trim(); store.set("rp_key", key); demo = !key && !sharedKey && !proxy; paintKey(); state.providers.clear(); say(""); loadMeta(); }
+    else if (v === "demo") { key = ""; store.set("rp_key", ""); demo = !sharedKey && !proxy; paintKey(); loadMeta(); }
   });
 }
 const soundLabel = () => { $("sound").textContent = "Sound: " + (state.sound ? "on" : "off"); $("sound").setAttribute("aria-pressed", state.sound); };
@@ -602,7 +610,7 @@ async function resolveBackdrops() {
   if (!missing().length) return;
   if (social.readBackdrops) { const shared = await social.readBackdrops(); Object.entries(shared || {}).forEach(([k, v]) => { if (validPath(v)) bdPaths[k] = v; }); }
   let added = false;
-  if (key || proxy) await Promise.all(missing().map(async (f) => { try { const d = await tmdb("/" + (f.type === "tv" ? "tv" : "movie") + "/" + f.id, new URLSearchParams({ language: "en-US" })); if (validPath(d.backdrop_path)) { bdPaths[cacheKey(f)] = d.backdrop_path; added = true; } } catch (e) { /* skip */ } }));
+  if (key || sharedKey || proxy) await Promise.all(missing().map(async (f) => { try { const d = await tmdb("/" + (f.type === "tv" ? "tv" : "movie") + "/" + f.id, new URLSearchParams({ language: "en-US" })); if (validPath(d.backdrop_path)) { bdPaths[cacheKey(f)] = d.backdrop_path; added = true; } } catch (e) { /* skip */ } }));
   store.set("rp_bd", JSON.stringify(bdPaths));
   if (added && social.writeBackdrops) social.writeBackdrops(Object.fromEntries(FILMS.filter((f) => validPath(bdPaths[cacheKey(f)])).map((f) => [cacheKey(f), bdPaths[cacheKey(f)]])));
 }
@@ -628,7 +636,7 @@ function paintThemes() {
     ok.forEach((f) => opt("film:" + cacheKey(f), f.title, (sw) => { sw.style.backgroundImage = "url(" + bdUrl(bdPaths[cacheKey(f)], "w300") + ")"; }));
   };
   group("Movies", FILMS.filter((f) => f.type !== "tv")); group("Series", FILMS.filter((f) => f.type === "tv"));
-  $("themeHint").hidden = !unresolved || !!key || proxy;
+  $("themeHint").hidden = !unresolved || !!key || !!sharedKey || proxy;
 }
 $("bgFile").onchange = async () => {
   const f = $("bgFile").files[0]; $("bgFile").value = ""; if (!f) return;
@@ -654,6 +662,12 @@ initStatic();
 await loadMeta();
 // first paint: posters on the reel so the machine does not look empty
 lastIdle = shuffle(DEMO.map((x) => ({ ...x, poster: null }))); reel.idle(lastIdle);
+window.rpSharedKey = (k) => {
+  if (key || !k || k === sharedKey) return;
+  sharedKey = k; demo = false; if (window.rpPaintKey) window.rpPaintKey(); loadMeta(); dailyPick(true);
+  resolveBackdrops().then(() => applyTheme(store.get("rp_theme", "dark")));
+  if (/^#t\//.test(location.hash)) route();
+};
 social = await initSocial({ $, el, seen, saveSeen, renderSeen, say, tastes: { get: () => tastes, set: (t) => setTastes(t, true) }, onNewProfile: openTastes, openTastes });
 dailyPick(false);
 if (social.onTab) social.onTab(tab);

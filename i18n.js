@@ -202,6 +202,8 @@ const T = {
   "Watchlist": "Quero ver", "+ Watchlist": "+ Quero ver", "In your watchlist": "Na tua lista", "Details": "Detalhes", "Cast": "Elenco",
   "Directed by": "Realização", "Written by": "Argumento", "Created by": "Criado por", "Stream": "Subscrição", "Rent": "Alugar", "Buy": "Comprar",
   "Log or rate": "Registar ou avaliar", "Edit my review": "Editar a minha crítica", "Trailer": "Trailer",
+  "Share this key so your friends can search every movie and series without creating their own. Anyone signed in to ReelPick can use it.": "Partilha esta chave para os teus amigos pesquisarem todos os filmes e séries sem criarem a deles. Qualquer pessoa com sessão iniciada no ReelPick a pode usar.",
+  "Share with everyone on ReelPick": "Partilhar com todos no ReelPick",
   "You:": "Tu:", "You": "Tu", "shared": "partilhou", "shared it": "partilhaste", " wrote a review": " escreveste uma crítica", " watched it": " viste", "Like": "Gosto", "Comments": "Comentários", "Share on my feed": "Partilhar no meu feed",
   "Shared": "Partilhado", "Share": "Partilhar", "Liked by": "Gostam:", "Shared on your feed.": "Partilhado no teu feed.",
   "This post can't be shared (private profile).": "Este post não pode ser partilhado (perfil privado).",

@@ -2,7 +2,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser, reauthenticateWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, query, where, documentId, limit, orderBy, getCountFromServer, onSnapshot, addDoc, limitToLast, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { sanitizeItem, keyOf, sanitizeProfile, pairId } from "./seen.js?v=1795196790";
+import { sanitizeItem, keyOf, sanitizeProfile, pairId } from "./seen.js?v=1795196914";
 
 export async function init(config) {
   const app = initializeApp(config), auth = getAuth(app), db = getFirestore(app), provider = new GoogleAuthProvider();
@@ -176,6 +176,10 @@ export async function init(config) {
       Object.keys(snap).forEach((k) => snap[k] === undefined && delete snap[k]);
       await setDoc(ref, { owner, ownerName: String(ownerName || "").slice(0, 40), ownerHandle: String(ownerHandle || "").slice(0, 20), item: snap, at: Date.now() });
     },
+
+    // ------------------------------------------------ shared TMDB key (read by signed-in users, written only by whoever shared it)
+    async readSharedKey() { try { const d = await getDoc(doc(db, "meta", "tmdb")); return d.exists() ? String(d.data().key || "") : ""; } catch (e) { return ""; } },
+    async shareKey(k) { await setDoc(doc(db, "meta", "tmdb"), { key: String(k).trim(), owner: me(), at: Date.now() }); },
 
     // ------------------------------------------------ watchlist ("want to watch")
     async myWatchlist() { return (await getDocs(collection(db, "users", me(), "watchlist"))).docs.map((d) => ({ key: d.id, ...d.data() })); },
