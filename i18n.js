@@ -204,6 +204,7 @@ const T = {
   "Log or rate": "Registar ou avaliar", "Edit my review": "Editar a minha crítica", "Trailer": "Trailer",
   "Share this key so your friends can search every movie and series without creating their own. Anyone signed in to ReelPick can use it.": "Partilha esta chave para os teus amigos pesquisarem todos os filmes e séries sem criarem a deles. Qualquer pessoa com sessão iniciada no ReelPick a pode usar.",
   "Share with everyone on ReelPick": "Partilhar com todos no ReelPick",
+  "Sign in with Google to search every movie and series.": "Entra com Google para pesquisares todos os filmes e séries.",
   "You:": "Tu:", "You": "Tu", "shared": "partilhou", "shared it": "partilhaste", " wrote a review": " escreveste uma crítica", " watched it": " viste", "Like": "Gosto", "Comments": "Comentários", "Share on my feed": "Partilhar no meu feed",
   "Shared": "Partilhado", "Share": "Partilhar", "Liked by": "Gostam:", "Shared on your feed.": "Partilhado no teu feed.",
   "This post can't be shared (private profile).": "Este post não pode ser partilhado (perfil privado).",

@@ -1,11 +1,11 @@
-import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle, tasteGenreIds, hashStr, mulberry32, dayKey } from "./query.js?v=1795196914";
-import { DEMO, DEMO_GENRES } from "./demo.js?v=1795196914";
-import { supported, createReel3D } from "./reel3d.js?v=1795196914";
-import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES, starsText } from "./seen.js?v=1795196914";
-import { initSocial } from "./social.js?v=1795196914";
-import { startI18n, tmdbLang, isPT, setLang } from "./i18n.js?v=1795196914";
-import { icon } from "./icons.js?v=1795196914";
-import { FILMS, PLAIN, validPath, cacheKey } from "./themes.js?v=1795196914";
+import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle, tasteGenreIds, hashStr, mulberry32, dayKey } from "./query.js?v=1795197276";
+import { DEMO, DEMO_GENRES } from "./demo.js?v=1795197276";
+import { supported, createReel3D } from "./reel3d.js?v=1795197276";
+import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES, starsText } from "./seen.js?v=1795197276";
+import { initSocial } from "./social.js?v=1795197276";
+import { startI18n, tmdbLang, isPT, setLang } from "./i18n.js?v=1795197276";
+import { icon } from "./icons.js?v=1795197276";
+import { FILMS, PLAIN, validPath, cacheKey } from "./themes.js?v=1795197276";
 startI18n();
 { const lb = document.getElementById("langBtn"); if (lb) { lb.textContent = isPT ? "English" : "Português"; lb.lang = isPT ? "en" : "pt-PT"; lb.title = isPT ? "Switch to English" : "Mudar para português"; lb.onclick = () => setLang(isPT ? "en" : "pt"); } }
 
@@ -559,7 +559,13 @@ async function logSearch() {
   }
   if (seq !== logSeq) return;
   box.replaceChildren();
-  if (!list.length) { box.appendChild(el("p", "hint", "Nothing found.")); return; }
+  if (!list.length) {
+    if (demo && social.enabled && !social.signedIn()) {
+      const c = el("div", "card empty"); c.appendChild(el("p", null, "Sign in with Google to search every movie and series."));
+      const b = el("button", "cta", "Sign in with Google"); b.type = "button"; b.onclick = () => { $("logDlg").close(); $("signIn").click(); }; c.appendChild(b); box.appendChild(c);
+    } else box.appendChild(el("p", "hint", demo ? "Demo mode: only the built-in sample can be searched. Add a free TMDB key to search every movie and series." : "Nothing found."));
+    return;
+  }
   list.forEach((it) => {
     const b = el("button", "lres"); b.type = "button";
     if (it.poster) { const i = el("img"); i.src = it.poster.replace("/w342/", "/w92/"); i.alt = ""; i.loading = "lazy"; b.appendChild(i); } else b.appendChild(el("span", "noposter"));
