@@ -453,7 +453,7 @@ export async function initSocial(ctx) {
       const [peopleList, rps] = await Promise.all([cloud.friendFeed([{ uid: me.uid, name: profile.name, handle: profile.handle }, ...friends]), cloud.myReposts().catch(() => [])]);
       myReposts = new Set(rps); feedAt = Date.now();
       paintFeedFriends(peopleList.filter((p) => p.uid !== me.uid && !isBlocked(p.uid))); paintFeedList(buildFeed(peopleList), !friends.length);
-      loadSuggestions(false);
+      loadSuggestions(false); loadMiniTop();
     } catch (e) { console.warn(e); list.replaceChildren(el("p", "hint", "Could not load the feed (" + (e.code || e.message) + ").")); }
     feedBusy = false;
   }
@@ -477,6 +477,26 @@ export async function initSocial(ctx) {
       box.appendChild(li);
     });
   }
+  function paintMiniTop(rows) {
+    const box = $("miniTopList"), top = (rows || []).filter((r) => r.reviews > 0).slice(0, 3);
+    box.replaceChildren();
+    if (!top.length) { box.appendChild(el("li", "hint", "No reviews yet. Write the first one!")); return; }
+    top.forEach((r, i) => {
+      const li = el("li", "mtrow p" + (i + 1)); li.appendChild(el("span", "rank", String(i + 1)));
+      const name = me && r.uid === me.uid ? "You" : r.name || "@" + r.handle;
+      const w = el("button", "lbwho"); w.type = "button"; w.onclick = () => openProfile(r.uid, { handle: r.handle });
+      w.appendChild(avatar(r.photo, name, "sm")); const t = el("span"); t.appendChild(el("b", null, name)); w.appendChild(t); li.appendChild(w);
+      const n = el("span", "lbn"); n.appendChild(el("b", null, String(r.reviews))); n.appendChild(el("small", null, r.reviews === 1 ? "review" : "reviews")); li.appendChild(n);
+      box.appendChild(li);
+    });
+  }
+  async function loadMiniTop() {
+    if (!me) return;
+    if (!lbCache.friends || Date.now() - (lbCache.friendsAt || 0) > 300e3) {
+      try { lbCache.friends = await cloud.board([{ uid: me.uid, name: profile.name, handle: profile.handle }, ...friends].filter((x) => !isBlocked(x.uid))); lbCache.friendsAt = Date.now(); } catch (e) { console.warn("minitop", e); return; }
+    }
+    paintMiniTop(lbCache.friends);
+  }
   async function loadBoard(force) {
     if (!me) { $("lbList").replaceChildren(emptyCard("Sign in to see who writes the most reviews.", "Sign in with Google", () => $("signIn").click())); return; }
     if (lbCache[lbScope] && !force) return paintBoard(lbCache[lbScope]);
@@ -485,7 +505,7 @@ export async function initSocial(ctx) {
     try {
       const mine = { uid: me.uid, name: profile.name, handle: profile.handle };
       const people = scope === "friends" ? [mine, ...friends] : [mine, ...(await cloud.publicPeople(50))];
-      lbCache[scope] = (await cloud.board(people.filter((x) => !isBlocked(x.uid))));
+      lbCache[scope] = (await cloud.board(people.filter((x) => !isBlocked(x.uid)))); if (scope === "friends") { lbCache.friendsAt = Date.now(); paintMiniTop(lbCache.friends); }
       if (scope === lbScope) paintBoard(lbCache[scope]);
     } catch (e) { console.warn(e); $("lbList").replaceChildren(el("li", "hint", "Could not load the leaderboard (" + (e.code || e.message) + ").")); }
     lbBusy = false;
