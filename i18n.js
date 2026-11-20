@@ -162,6 +162,16 @@ const T = {
   "Ranked by reviews written. “Everyone” only includes public profiles.": "Ordenado pelo número de críticas. “Todos” inclui só perfis públicos.",
   "Nobody here yet.": "Ainda não há ninguém.", "Counting reviews…": "A contar críticas…",
   "Sign in to see who writes the most reviews.": "Entra para veres quem escreve mais críticas.", "review": "crítica", "reviews": "críticas",
+  "Messages": "Mensagens", "Message": "Mensagem", "🔔 Turn on alerts": "🔔 Ativar avisos", "Back": "Voltar",
+  "Write a message…": "Escreve uma mensagem…", "Send": "Enviar", "Send to…": "Enviar a…", "💬 Send to a friend": "💬 Enviar a um amigo",
+  "💬 Message": "💬 Mensagem", "💬 Reply": "💬 Responder", "📲 Install app": "📲 Instalar app",
+  "Choose a friend to talk about movies and series.": "Escolhe um amigo para falarem de filmes e séries.",
+  "Sign in to talk with your friends about movies and series.": "Entra para falares com os teus amigos sobre filmes e séries.",
+  "Add friends to start a conversation.": "Adiciona amigos para começares uma conversa.", "Say hello 👋": "Diz olá 👋",
+  "No messages yet. Recommend something!": "Ainda sem mensagens. Recomenda alguma coisa!", "Loading…": "A carregar…",
+  "Sign in with Google to send it to a friend.": "Entra com Google para enviares a um amigo.", "Add friends first, in People.": "Primeiro adiciona amigos, em Pessoas.",
+  "On iPhone: tap Share, then “Add to Home Screen”.": "No iPhone: toca em Partilhar e depois em “Adicionar ao ecrã principal”.",
+  "You:": "Tu:", "All": "Todas", "All platforms": "Todas as plataformas",
   "just now": "agora mesmo", "yesterday": "ontem", "PT": "PT", "English": "English", "Português": "Português",
 };
 
@@ -206,6 +216,8 @@ const P = [
   [/^Open (.+)'s profile$/, (m) => "Abrir o perfil de " + m[1]],
   [/^(\d+) recent titles?$/, (m) => m[1] + (m[1] === "1" ? " título recente" : " títulos recentes")],
   [/^Pinned on your profile: (.+)$/, (m) => "Destacado no teu perfil: " + m[1]],
+  ERR("Could not send", "Não foi possível enviar"),
+  ERR("Could not load messages", "Não foi possível carregar as mensagens"),
   [/^(\d+) seen$/, (m) => m[1] + " vistos"],
   [/^(.+) \(you\)$/, (m) => m[1] + " (tu)"],
   ERR("Could not load the leaderboard", "Não foi possível carregar a classificação"),
@@ -235,8 +247,8 @@ export function tr(s) {
 const ATTRS = ["placeholder", "title", "aria-label", "alt"];
 const NO_TEXT = new Set(["SCRIPT", "STYLE", "TEXTAREA"]);
 function fixNode(n) {
-  if (n.nodeType === 3) { const p = n.parentNode; if (p && NO_TEXT.has(p.nodeName)) return; const v = tr(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; return; }
-  if (n.nodeType !== 1) return;
+  if (n.nodeType === 3) { const p = n.parentElement; if (p && (NO_TEXT.has(p.nodeName) || p.closest("[translate=no]"))) return; const v = tr(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; return; }
+  if (n.nodeType !== 1 || n.getAttribute("translate") === "no") return;
   ATTRS.forEach((a) => { const v = n.getAttribute(a); if (v) { const t = tr(v); if (t !== v) n.setAttribute(a, t); } });
   if (!NO_TEXT.has(n.nodeName)) n.childNodes.forEach(fixNode);
 }

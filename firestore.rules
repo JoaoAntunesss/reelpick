@@ -90,5 +90,39 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/requests/$((request.auth.uid == request.resource.data.a ? request.resource.data.b : request.resource.data.a) + '_' + request.auth.uid));
       allow delete: if signedIn() && (resource.data.a == request.auth.uid || resource.data.b == request.auth.uid);
     }
+      // Private chat between two friends. The chat id is the friendship id: smaller uid + '_' + larger uid.
+    function inChat(cid) { return signedIn() && request.auth.uid in cid.split('_'); }
+    function friendsNow(cid) { return exists(/databases/$(database)/documents/friendships/$(cid)); }
+    function validShare(p) {
+      return p is map
+        && p.keys().hasOnly(['type', 'id', 'title', 'year', 'poster'])
+        && p.type in ['movie', 'tv'] && p.id is int
+        && p.title is string && p.title.size() <= 200
+        && p.year is string && p.year.size() <= 4
+        && (p.poster == null || (p.poster is string && p.poster.size() <= 200 && p.poster.matches('^https://image\\.tmdb\\.org/.*')));
+    }
+    match /chats/{cid} {
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      allow create, update: if inChat(cid) && friendsNow(cid)
+        && request.resource.data.keys().hasOnly(['members', 'last', 'updatedAt', 'read'])
+        && request.resource.data.members == cid.split('_')
+        && request.resource.data.updatedAt is number
+        && request.resource.data.read is map && request.resource.data.read.keys().hasOnly(cid.split('_'))
+        && request.resource.data.last is map && request.resource.data.last.keys().hasOnly(['text', 'from', 'at'])
+        && request.resource.data.last.text is string && request.resource.data.last.text.size() <= 200
+        && (request.resource.data.last.from == request.auth.uid || (resource != null && request.resource.data.last == resource.data.last));
+      allow delete: if false;
+
+      match /msgs/{mid} {
+        allow read: if inChat(cid);
+        allow create: if inChat(cid) && friendsNow(cid)
+          && request.resource.data.keys().hasOnly(['from', 'text', 'at', 'share'])
+          && request.resource.data.from == request.auth.uid
+          && request.resource.data.text is string && request.resource.data.text.size() <= 1000
+          && request.resource.data.at is number
+          && (!('share' in request.resource.data) || validShare(request.resource.data.share));
+        allow delete: if inChat(cid) && resource.data.from == request.auth.uid;
+      }
+    }
   }
 }

@@ -65,13 +65,13 @@ export async function initSocial(ctx) {
     if (user) {
       wasIn = true;
       try { await syncDown(user); } catch (e) { console.warn(e); say("Signed in, but the cloud could not be read (" + (e.code || e.message) + "). Check the Firestore rules."); }
-      paintAccount(); loadFeed(true); delete lbCache.friends; delete lbCache.all; if (curTab === "top") loadBoard(true);
+      paintAccount(); loadFeed(true); startChats(); paintNotifBtn(); delete lbCache.friends; delete lbCache.all; if (curTab === "top") loadBoard(true);
       const nick = normalizeHandle(new URLSearchParams(location.search).get("p"));
       if (nick && profile) { history.replaceState(null, "", location.pathname + location.hash); const uid = await guard(cloud.findHandle(nick)); if (uid) openProfile(uid, { handle: nick }); else say("Nobody uses the nickname @" + nick + "."); }
     } else {
       profile = null; friends = []; incoming = []; outgoing = []; $("feedFriends").replaceChildren(); $("feedList").replaceChildren(); feedAt = 0;
       if (wasIn && !keepLocal) { seen.clear(); saveSeen(); renderSeen(); }   // the list stays in the account
-      wasIn = false; keepLocal = false; paintAccount(); delete lbCache.friends; delete lbCache.all; if (curTab === "top") loadBoard(true);
+      wasIn = false; keepLocal = false; stopChats(); paintAccount(); delete lbCache.friends; delete lbCache.all; if (curTab === "top") loadBoard(true);
       const nick = normalizeHandle(new URLSearchParams(location.search).get("p"));
       if (nick) say("Sign in with Google to see @" + nick + "'s profile.");
     }
@@ -194,7 +194,8 @@ export async function initSocial(ctx) {
     if (!data) { body.replaceChildren(el("p", "hint", relation(uid) === "friend" ? "This person made their profile private." : "This profile is not visible to you. Send a friend request to see more, if they allow friends to view it.")); }
     else { const show = (w) => { tR.classList.toggle("sel", w === "r"); tC.classList.toggle("sel", w === "c"); (w === "r" ? paintReviews : (b, i) => paintCompare(b, i, name))(body, items); };
       tR.onclick = () => show("r"); tC.onclick = () => show("c"); tC.hidden = uid === me.uid; show("r"); }
-    const btn = $("vAdd"), paintBtn = () => { const r = relation(uid); btn.hidden = r === "me"; btn.textContent = { friend: "Remove friend", incoming: "Accept friend request", outgoing: "Request sent · Cancel", none: "Add friend" }[r] || ""; btn.className = r === "friend" || r === "outgoing" ? "ghost" : ""; };
+    const btn = $("vAdd"), paintBtn = () => { const r = relation(uid); btn.hidden = r === "me"; btn.textContent = { friend: "Remove friend", incoming: "Accept friend request", outgoing: "Request sent · Cancel", none: "Add friend" }[r] || ""; btn.className = r === "friend" || r === "outgoing" ? "ghost" : ""; $("vMsg").hidden = r !== "friend"; };
+    $("vMsg").onclick = () => { $("viewDlg").close(); openChat(uid); };
     paintBtn();
     btn.onclick = async () => { const r = relation(uid);
       if (r === "friend") { if (!confirmBtn(btn, "Remove friend")) return; await guard(cloud.removeFriend(uid)); }
@@ -264,8 +265,9 @@ export async function initSocial(ctx) {
       const meta = el("div", "fmeta"); meta.appendChild(el("span", "ftype", typeLabel(it.type)));
       if (it.rating) meta.appendChild(el("span", "fstars", "★".repeat(it.rating) + "☆".repeat(5 - it.rating)));
       d.appendChild(meta);
-      d.appendChild(el("p", it.review ? "freview" : "freview none", it.review ? "“" + it.review + "”" : "No review, just watched."));
+      const rv = el("p", it.review ? "freview" : "freview none", it.review ? "“" + it.review + "”" : "No review, just watched."); if (it.review) rv.translate = false; d.appendChild(rv);
       body.appendChild(d); a.appendChild(body);
+      const rep = el("button", "ghost sm freply", "💬 Reply"); rep.type = "button"; rep.onclick = () => openChat(e.uid, it); a.appendChild(rep);
       box.appendChild(a);
     }
   }
@@ -317,11 +319,139 @@ export async function initSocial(ctx) {
   }
   document.querySelectorAll("#lbSeg button").forEach((b) => { b.onclick = () => { lbScope = b.dataset.v; document.querySelectorAll("#lbSeg button").forEach((x) => x.classList.toggle("on", x === b)); loadBoard(false); }; });
   let curTab = "feed";
-  const onTab = (t) => { curTab = t; if (t === "top") loadBoard(false); if (t === "feed") loadFeed(false); };
+  const onTab = (t) => { curTab = t; if (t === "top") loadBoard(false); if (t === "feed") loadFeed(false); if (t === "chat") { paintChatList(); paintNotifBtn(); if (chatWith) cloud.markRead(chatWith); } paintBadge(); };
+
+  // ---------------------------------------------------------------- chat
+  let chats = [], unChats = null, unMsgs = null, chatWith = null, pendingShare = null, lastSeenAt = 0;
+  const people = new Map();   // uid -> {name, handle, photo}
+  const fmtTime = (t) => { const d = new Date(t), today = new Date().toDateString() === d.toDateString(); return today ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : timeAgo(t); };
+  const unread = (c) => c.last && c.last.from !== me.uid && c.last.at > (c.read[me.uid] || 0) && !(chatWith === c.other && curTab === "chat" && !document.hidden);
+  async function personOf(uid) {
+    if (people.has(uid)) return people.get(uid);
+    const f = friends.find((x) => x.uid === uid) || {};
+    const base = { name: f.name || "", handle: f.handle || "", photo: null }; people.set(uid, base);
+    const c = await cloud.peek(uid); if (c) Object.assign(base, { name: c.name || base.name, handle: c.handle || base.handle, photo: c.photo || null });
+    return base;
+  }
+  const nameOf = (p) => p.name || (p.handle ? "@" + p.handle : "Friend");
+  function paintBadge() {
+    const n = me ? chats.filter(unread).length : 0;
+    $("chatBadge").hidden = !n; $("chatBadge").textContent = n;
+    document.title = (n ? "(" + n + ") " : "") + document.title.replace(/^\(\d+\) /, "");
+  }
+  async function paintChatList() {
+    const box = $("chatList");
+    if (!me) { box.replaceChildren(emptyCard("Sign in to talk with your friends about movies and series.", "Sign in with Google", () => $("signIn").click())); return; }
+    if (!friends.length) { box.replaceChildren(emptyCard("Add friends to start a conversation.", "Find people", () => $("friendsBtn").click())); return; }
+    const byOther = new Map(chats.map((c) => [c.other, c]));
+    const order = [...friends].sort((a, b) => ((byOther.get(b.uid) || {}).updatedAt || 0) - ((byOther.get(a.uid) || {}).updatedAt || 0));
+    const rows = await Promise.all(order.map(async (f) => {
+      const p = await personOf(f.uid), c = byOther.get(f.uid);
+      const r = el("button", "crow" + (chatWith === f.uid ? " sel" : "") + (c && unread(c) ? " unread" : "")); r.type = "button";
+      r.appendChild(avatar(p.photo, nameOf(p), "sm"));
+      const t = el("span", "ctext"); t.appendChild(el("b", null, nameOf(p)));
+      const sm = el("small"); if (c && c.last) { if (c.last.from === me.uid) sm.appendChild(el("span", null, "You:")); const lt = el("span", null, " " + c.last.text); lt.translate = false; sm.appendChild(lt); } else sm.textContent = "Say hello 👋";
+      t.appendChild(sm); r.appendChild(t);
+      if (c && c.last) r.appendChild(el("time", null, fmtTime(c.last.at)));
+      r.onclick = () => openChat(f.uid);
+      return r;
+    }));
+    box.replaceChildren(...rows);
+  }
+  function shareCard(sh, cls) {
+    const a = el("a", "shcard " + (cls || "")); a.href = "https://www.themoviedb.org/" + sh.type + "/" + sh.id; a.target = "_blank"; a.rel = "noopener noreferrer";
+    if (sh.poster) { const i = el("img"); i.src = sh.poster; i.alt = ""; i.loading = "lazy"; a.appendChild(i); }
+    const d = el("span"); d.appendChild(el("b", null, sh.title)); d.appendChild(el("small", null, [sh.year, typeLabel(sh.type)].filter(Boolean).join(" · "))); a.appendChild(d);
+    return a;
+  }
+  function paintMsgs(list) {
+    const box = $("msgs"), atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    box.replaceChildren();
+    if (!list.length) box.appendChild(el("p", "hint cempty", "No messages yet. Recommend something!"));
+    let prevDay = "";
+    for (const m of list) {
+      const day = new Date(m.at).toDateString();
+      if (day !== prevDay) { prevDay = day; box.appendChild(el("div", "cday", new Date(m.at).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }))); }
+      const b = el("div", "bubble " + (m.from === me.uid ? "mine" : "theirs"));
+      if (m.share) b.appendChild(shareCard(m.share));
+      if (m.text) { const t = el("p", null, m.text); t.translate = false; b.appendChild(t); }
+      b.appendChild(el("time", null, new Date(m.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })));
+      box.appendChild(b);
+    }
+    if (atEnd || list.length && list[list.length - 1].from === me.uid) box.scrollTop = box.scrollHeight;
+  }
+  function paintShareBox() {
+    const box = $("shareBox"); box.hidden = !pendingShare; box.replaceChildren();
+    if (!pendingShare) return;
+    box.appendChild(shareCard(pendingShare, "draft"));
+    const x = el("button", "ghost sm", "×"); x.type = "button"; x.setAttribute("aria-label", "Remove"); x.onclick = () => { pendingShare = null; paintShareBox(); }; box.appendChild(x);
+  }
+  async function openChat(uid, share) {
+    if (!me) return;
+    if (location.hash !== "#chat") location.hash = "chat";
+    chatWith = uid; if (share) pendingShare = share;
+    const p = await personOf(uid);
+    const who = $("chatWho"); who.replaceChildren(avatar(p.photo, nameOf(p), "sm"), el("b", null, nameOf(p)));
+    who.onclick = () => openProfile(uid, { handle: p.handle });
+    $("convo").hidden = false; $("convoEmpty").hidden = true; $("v-chat").classList.add("open");
+    paintShareBox(); $("msgs").replaceChildren(el("p", "hint cempty", "Loading…"));
+    if (unMsgs) unMsgs();
+    unMsgs = cloud.watchMessages(uid, (list) => { if (chatWith !== uid) return; paintMsgs(list); cloud.markRead(uid); }, (e) => { console.warn(e); $("msgs").replaceChildren(el("p", "hint", "Could not load messages (" + (e.code || e.message) + ").")); });
+    paintChatList(); paintBadge();
+    if (window.matchMedia("(min-width: 701px)").matches) $("chatInput").focus();
+  }
+  function closeChat() {
+    if (unMsgs) unMsgs(); unMsgs = null; chatWith = null; pendingShare = null;
+    $("convo").hidden = true; $("convoEmpty").hidden = false; $("v-chat").classList.remove("open"); paintChatList();
+  }
+  $("chatBack").onclick = closeChat;
+  $("chatForm").onsubmit = async (ev) => {
+    ev.preventDefault();
+    const text = $("chatInput").value.trim(); if (!chatWith || (!text && !pendingShare)) return;
+    const sh = pendingShare; $("chatInput").value = ""; pendingShare = null; paintShareBox();
+    try { await cloud.sendMessage(chatWith, text, sh); }
+    catch (e) { console.warn(e); $("chatInput").value = text; pendingShare = sh; paintShareBox(); say("Could not send (" + (e.code || e.message) + ")."); }
+  };
+  function notify(c) {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    personOf(c.other).then((p) => {
+      const title = nameOf(p), opts = { body: c.last.text, icon: "icons/icon-192.png", badge: "icons/icon-192.png", tag: "chat-" + c.other, data: { url: location.pathname + "#chat" } };
+      if (navigator.serviceWorker && navigator.serviceWorker.ready) navigator.serviceWorker.ready.then((r) => r.showNotification(title, opts)).catch(() => {}); else new Notification(title, opts);
+    });
+  }
+  function startChats() {
+    if (unChats) unChats();
+    lastSeenAt = Date.now();
+    unChats = cloud.watchChats((list) => {
+      for (const c of list) if (c.last && c.last.at > lastSeenAt && c.last.from !== me.uid && (document.hidden || chatWith !== c.other || curTab !== "chat")) notify(c);
+      lastSeenAt = Math.max(lastSeenAt, ...list.map((c) => (c.last ? c.last.at : 0)));
+      chats = list; paintBadge(); if (curTab === "chat") paintChatList();
+    }, (e) => console.warn("chats", e));
+  }
+  function stopChats() { if (unChats) unChats(); unChats = null; chats = []; closeChat(); paintBadge(); people.clear(); }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && chatWith && curTab === "chat") { cloud.markRead(chatWith); paintBadge(); } });
+  const paintNotifBtn = () => { $("notifBtn").hidden = !me || !("Notification" in window) || Notification.permission !== "default"; };
+  $("notifBtn").onclick = async () => { try { await Notification.requestPermission(); } catch (e) { /* ignore */ } paintNotifBtn(); };
+
+  // share a title with a friend
+  function shareWith(item) {
+    if (!me) { say("Sign in with Google to send it to a friend."); return; }
+    if (!friends.length) { say("Add friends first, in People."); return; }
+    const sh = { type: item.type, id: item.id, title: item.title, year: String(item.year || ""), poster: item.poster || null };
+    const box = $("pickList"); box.replaceChildren();
+    friends.forEach((f) => {
+      const r = el("button", "crow"); r.type = "button";
+      personOf(f.uid).then((p) => { r.replaceChildren(avatar(p.photo, nameOf(p), "sm"), el("b", null, nameOf(p))); });
+      r.textContent = f.name || "@" + f.handle;
+      r.onclick = () => { $("pickDlg").close(); openChat(f.uid, sh); };
+      box.appendChild(r);
+    });
+    $("pickDlg").showModal();
+  }
   cloud.onAuth(onAuth);
 
   return {
-    enabled: true, signedIn: () => !!me, onTab,
+    enabled: true, signedIn: () => !!me, onTab, shareWith,
     upsert: (item) => { if (me) guard(cloud.saveItem(item)); },
     remove: (key) => { if (me) guard(cloud.removeItem(key)); },
     pushMany: (items) => { if (me && items.length) guard(cloud.pushMany(items)); },

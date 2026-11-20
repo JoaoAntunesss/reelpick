@@ -1,7 +1,7 @@
 // Firebase wrapper (Auth with Google + Firestore). Loaded only when firebase-config.js has a config.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser, reauthenticateWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, query, where, documentId, limit, orderBy, getCountFromServer } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, query, where, documentId, limit, orderBy, getCountFromServer, onSnapshot, addDoc, limitToLast } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { sanitizeItem, keyOf, sanitizeProfile, pairId } from "./seen.js";
 
 export async function init(config) {
@@ -112,10 +112,39 @@ export async function init(config) {
     },
     async removeFriend(uid2) { await deleteDoc(doc(db, "friendships", pairId(me(), uid2))); },
 
+    // ------------------------------------------------ chat (friends only; chat id = friendship id)
+    /** Live list of my chats: cb([{id, other, last:{text,from,at}, updatedAt, read}]). Returns unsubscribe. */
+    watchChats(cb, onErr) {
+      const uid = me();
+      return onSnapshot(query(collection(db, "chats"), where("members", "array-contains", uid)), (s) => {
+        cb(s.docs.map((d) => { const x = d.data(); return { id: d.id, other: (x.members || []).find((m) => m !== uid) || "", last: x.last || null, updatedAt: x.updatedAt || 0, read: x.read || {} }; }).sort((a, b) => b.updatedAt - a.updatedAt));
+      }, onErr);
+    },
+    /** Live last 60 messages of the chat with a friend. */
+    watchMessages(other, cb, onErr) {
+      const cid = pairId(me(), other);
+      return onSnapshot(query(collection(db, "chats", cid, "msgs"), orderBy("at"), limitToLast(60)), (s) => cb(s.docs.map((d) => ({ id: d.id, ...d.data() }))), onErr);
+    },
+    async sendMessage(other, text, share) {
+      const uid = me(), cid = pairId(uid, other), at = Date.now(), members = [uid, other].sort();
+      const msg = { from: uid, text: String(text || "").slice(0, 1000), at };
+      if (share) msg.share = { type: share.type, id: share.id, title: String(share.title).slice(0, 200), year: String(share.year || "").slice(0, 4), poster: share.poster || null };
+      const preview = msg.text || (share ? "🎬 " + msg.share.title : "");
+      await setDoc(doc(db, "chats", cid), { members, last: { text: preview.slice(0, 200), from: uid, at }, updatedAt: at, read: { [uid]: at } }, { merge: true });
+      await addDoc(collection(db, "chats", cid, "msgs"), msg);
+    },
+    async markRead(other) {
+      const uid = me(); try { await setDoc(doc(db, "chats", pairId(uid, other)), { read: { [uid]: Date.now() } }, { merge: true }); } catch (e) { /* chat may not exist yet */ }
+    },
+
     async deleteAccount(handle) {
       const uid = me(), f = collection(db, "friendships"), r = collection(db, "requests");
       const lists = await Promise.all([getDocs(seenCol(uid)), getDocs(query(f, where("a", "==", uid))), getDocs(query(f, where("b", "==", uid))), getDocs(query(r, where("to", "==", uid))), getDocs(query(r, where("from", "==", uid)))]);
       for (const l of lists) await deleteAll(l.docs);
+      try {
+        const chats = await getDocs(query(collection(db, "chats"), where("members", "array-contains", uid)));
+        for (const c of chats.docs) { const mine = await getDocs(query(collection(db, "chats", c.id, "msgs"), where("from", "==", uid))); await deleteAll(mine.docs); }
+      } catch (e) { console.warn("chats", e); }
       const b = writeBatch(db); if (handle) b.delete(doc(db, "handles", handle)); b.delete(userDoc(uid)); await b.commit();
       try { await deleteUser(auth.currentUser); }
       catch (e) { if (e.code === "auth/requires-recent-login") { await reauthenticateWithPopup(auth.currentUser, provider); await deleteUser(auth.currentUser); } else throw e; }

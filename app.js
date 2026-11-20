@@ -99,7 +99,12 @@ async function loadMeta() {
       const [pm, pt] = await Promise.all([tmdb("/watch/providers/movie", pr), tmdb("/watch/providers/tv", pr)]);
       const map = new Map();
       [...pm.results, ...pt.results].forEach((p) => { if (!map.has(p.provider_id)) map.set(p.provider_id, { id: p.provider_id, name: p.provider_name, logo: p.logo_path, prio: (p.display_priorities || {})[state.region] ?? 999 }); });
-      providerList = [...map.values()].sort((a, b) => a.prio - b.prio).slice(0, 24);
+      // drop add-on channels and "with ads" duplicates; keep the big ones first (HBO Max, SkyShowtime…)
+      const junk = /channel|with ads|amazon video|ad-supported|basic|standard|kids|free|plex|tubi|pluto|rakuten viki|filmzie|curiosity|docsville|spamflix|cultpix|dekkoo|magellan|true story|hoichoi|eventive|kocowa|wow presents/i;
+      const BIG = /^(netflix|amazon prime video|disney plus|hbo max|max|skyshowtime|apple tv\+?|apple tv plus|filmin|rtp play|opto|tvi player|movistar|filmin portugal|paramount plus|mubi|crunchyroll|lionsgate)/i;
+      const seenName = new Set();
+      providerList = [...map.values()].filter((p) => !junk.test(p.name)).filter((p) => { const k = p.name.toLowerCase().replace(/[^a-z]/g, ""); if (seenName.has(k)) return false; seenName.add(k); return true; })
+        .sort((a, b) => (BIG.test(b.name) - BIG.test(a.name)) || a.prio - b.prio).slice(0, 30);
     } catch (e) { say(e.message); genreList = []; providerList = []; }
   }
   state.genres = new Set([...state.genres].filter((n) => genreList.some((g) => g.name === n)));
@@ -120,6 +125,12 @@ function renderFilters() {
   });
   const pbox = $("providers"); pbox.replaceChildren();
   if (demo) pbox.appendChild(el("p", "hint", "Platform filters need a TMDB key."));
+  if (providerList.length) {
+    const all = providerList.every((p) => state.providers.has(p.id));
+    const b = el("button", "prov allprov" + (all ? " on" : ""), "All"); b.type = "button"; b.title = "All platforms"; b.setAttribute("aria-pressed", all);
+    b.onclick = () => { if (all) state.providers.clear(); else providerList.forEach((p) => state.providers.add(p.id)); renderFilters(); };
+    pbox.appendChild(b);
+  }
   providerList.forEach((p) => {
     const b = el("button", "prov" + (state.providers.has(p.id) ? " on" : ""));
     b.title = p.name; b.setAttribute("aria-label", p.name); b.setAttribute("aria-pressed", state.providers.has(p.id));
@@ -144,6 +155,7 @@ function initStatic() {
   soundLabel();
   $("spin").onclick = () => spin();
   $("seen").onclick = () => { if (current) markSeen(current); spin(); };
+  $("rSend").onclick = () => { if (current && social.shareWith) social.shareWith(current); };
   $("rRate").onclick = () => { if (!current) return; const k = markSeen(current); renderSeen(); $("seenClear").textContent = "Clear all"; $("seenClear").dataset.armed = ""; $("seenDlg").showModal(); openEditor(k); };
   for (let i = 1; i <= 5; i++) { const b = el("button", null, "★"); b.type = "button"; b.setAttribute("aria-label", i + " star" + (i > 1 ? "s" : "")); b.onclick = () => paintStars(Number($("seenEdit").dataset.rating) === i ? 0 : i); $("eStars").appendChild(b); }
   $("eSave").onclick = () => {
@@ -307,7 +319,7 @@ async function showResult(it) {
     pv.appendChild(el("small", null, "included in " + REGIONS[state.region] + " (via JustWatch)"));
   } else if (!demo) pv.appendChild(el("small", null, "Not on a subscription platform in " + REGIONS[state.region] + " right now."));
   $("rTrailer").href = "https://www.youtube.com/results?search_query=" + encodeURIComponent(info.title + " " + info.year + " trailer");
-  $("result").hidden = false; $("result").classList.remove("flip"); void $("result").offsetWidth; $("result").classList.add("flip");
+  $("rSend").hidden = !social.signedIn(); $("result").hidden = false; $("result").classList.remove("flip"); void $("result").offsetWidth; $("result").classList.add("flip");
   $("result").scrollIntoView({ block: "nearest", behavior: reduced() ? "auto" : "smooth" });
 }
 
@@ -390,7 +402,7 @@ async function dailyPick(force) {
 }
 
 // ------------------------------------------------------------------ sections (feed / choose / top)
-const TABS = ["feed", "pick", "top"];
+const TABS = ["feed", "pick", "chat", "top"];
 let lastIdle = null;
 function showTab(t, focusId) {
   tab = t;
@@ -409,6 +421,18 @@ function route() {
 }
 window.addEventListener("hashchange", route);
 $("filtersBox").open = window.matchMedia("(min-width: 901px)").matches;
+
+// ------------------------------------------------------------------ install as an app (PWA)
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch((e) => console.warn("sw", e));
+let installEvt = null;
+const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; $("installWrap").hidden = false; });
+window.addEventListener("appinstalled", () => { $("installWrap").hidden = true; installEvt = null; });
+$("installBtn").onclick = async () => {
+  if (installEvt) { installEvt.prompt(); await installEvt.userChoice.catch(() => null); installEvt = null; $("installWrap").hidden = true; }
+  else say("On iPhone: tap Share, then “Add to Home Screen”.");
+};
+if (!standalone() && /iphone|ipad|ipod/i.test(navigator.userAgent)) $("installWrap").hidden = false;
 
 // ------------------------------------------------------------------ start
 route();

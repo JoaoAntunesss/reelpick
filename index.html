@@ -2,10 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ReelPick — spin for something to watch</title>
 <meta name="description" content="Pick genres, your streaming platforms and a vibe, then spin the slot machine for a random movie or series.">
-<link rel="icon" href="data:,">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b0713">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ReelPick">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -15,6 +22,7 @@
   <nav class="navtabs" aria-label="Sections">
     <a href="#feed" data-tab="feed"><i aria-hidden="true">🏠</i><span>Feed</span></a>
     <a href="#pick" data-tab="pick"><i aria-hidden="true">🎰</i><span>Choose</span></a>
+    <a href="#chat" data-tab="chat"><i aria-hidden="true">💬</i><span>Messages</span><b id="chatBadge" class="badge" hidden></b></a>
     <a href="#top" data-tab="top"><i aria-hidden="true">🏆</i><span>Top</span></a>
   </nav>
   <div id="account" class="account" hidden>
@@ -119,6 +127,7 @@
           <a id="rTrailer" class="btn" target="_blank" rel="noopener noreferrer">Watch trailer</a>
           <button id="rRate" class="ghost">I've watched it — rate</button>
           <button id="seen" class="ghost">Seen it — spin again</button>
+          <button id="rSend" class="ghost" type="button" hidden>💬 Send to a friend</button>
         </div>
       </div>
     </article>
@@ -150,6 +159,20 @@
 
 </div>
 
+<div id="v-chat" class="view chatview" data-view="chat" hidden>
+  <section class="card chatlist">
+    <div class="feedtop"><h2>Messages</h2><button type="button" id="notifBtn" class="ghost sm" hidden>🔔 Turn on alerts</button></div>
+    <div id="chatList" class="clist"></div>
+  </section>
+  <section class="card convo" id="convo" hidden>
+    <div class="chead"><button type="button" id="chatBack" class="ghost sm" aria-label="Back">←</button><div id="chatWho" class="cwho"></div></div>
+    <div id="msgs" class="msgs"></div>
+    <div id="shareBox" class="sharebox" hidden></div>
+    <form id="chatForm" class="composer" autocomplete="off"><input id="chatInput" maxlength="1000" placeholder="Write a message…" aria-label="Message"><button class="cta" id="chatSend" type="submit">Send</button></form>
+  </section>
+  <section class="card convo-empty" id="convoEmpty"><p>💬</p><p class="hint">Choose a friend to talk about movies and series.</p></section>
+</div>
+
 <div id="v-top" class="view" data-view="top" hidden>
   <section class="card board">
     <div class="feedtop">
@@ -164,7 +187,7 @@
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <footer>
   <p>This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data provided by JustWatch via TMDB.</p>
-  <p><button id="keyBtn" class="link">TMDB key…</button> · <button id="seenBtn" class="link">My seen list (0)</button> · <button id="langBtn" class="link" type="button">Português</button></p>
+  <p><button id="keyBtn" class="link">TMDB key…</button> · <button id="seenBtn" class="link">My seen list (0)</button> · <button id="langBtn" class="link" type="button">Português</button><span id="installWrap" hidden> · <button id="installBtn" class="link" type="button">📲 Install app</button></span></p>
 </footer>
 
 <dialog id="seenDlg" class="wide">
@@ -256,7 +279,15 @@
     <div id="vPinned"></div>
     <div class="tabs" role="tablist"><button type="button" id="vTabR" class="tab sel" role="tab">Reviews</button><button type="button" id="vTabC" class="tab" role="tab">Compared with me</button></div>
     <div id="vBody" class="vbody"></div>
-    <div class="row"><button type="button" id="vAdd" hidden>Add friend</button><button value="close" class="ghost">Close</button></div>
+    <div class="row"><button type="button" id="vMsg" hidden>💬 Message</button><button type="button" id="vAdd" hidden>Add friend</button><button value="close" class="ghost">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="pickDlg">
+  <form method="dialog">
+    <h3>Send to…</h3>
+    <div id="pickList" class="flist"></div>
+    <div class="row"><button value="close" class="ghost">Close</button></div>
   </form>
 </dialog>
 
