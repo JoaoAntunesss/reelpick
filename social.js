@@ -1,9 +1,10 @@
 // Accounts, nicknames, friend requests, profiles and comparison. Does nothing unless firebase-config.js has a config.
-import { isPT } from "./i18n.js?v=1795193773";
-import { icon } from "./icons.js?v=1795193773";
-import { sanitizeItem, mergeSeen, compareLists, normalizeHandle, sanitizePinned, validPhoto, sanitizeProfile, buildFeed, timeAgo } from "./seen.js?v=1795193773";
+import { isPT } from "./i18n.js?v=1795196790";
+import { icon } from "./icons.js?v=1795196790";
+import { starsText } from "./seen.js?v=1795196790";
+import { sanitizeItem, mergeSeen, compareLists, normalizeHandle, sanitizePinned, validPhoto, sanitizeProfile, buildFeed, timeAgo } from "./seen.js?v=1795196790";
 
-const stars = (n) => (n ? "★".repeat(n) + "☆".repeat(5 - n) : "not rated");
+const stars = (n) => (n ? starsText(n) : "not rated");
 
 async function toPhoto(file) {
   if (!file || !/^image\//.test(file.type) || file.size > 25e6) throw new Error("Choose an image file (up to 25 MB).");
@@ -29,10 +30,10 @@ export async function initSocial(ctx) {
   const hasTastes = (t) => t && t.genres && t.genres.length;
   const off = { enabled: false, signedIn: () => false, upsert() {}, remove() {}, pushMany() {}, pin: async () => {} };
   let cfg = null;
-  try { cfg = (await import("./firebase-config.js?v=1795193773")).firebaseConfig; } catch (e) { /* no config file */ }
+  try { cfg = (await import("./firebase-config.js?v=1795196790")).firebaseConfig; } catch (e) { /* no config file */ }
   if (!cfg) return off;
   let cloud;
-  try { cloud = await (await import("./cloud.js?v=1795193773")).init(cfg); } catch (e) { console.warn("Cloud unavailable:", e); return off; }
+  try { cloud = await (await import("./cloud.js?v=1795196790")).init(cfg); } catch (e) { console.warn("Cloud unavailable:", e); return off; }
 
   let blocked = new Map();   // uid -> {name, handle}
   const isBlocked = (uid) => blocked.has(uid);
@@ -50,7 +51,7 @@ export async function initSocial(ctx) {
 
   function paintAccount() {
     $("account").hidden = false;
-    $("signIn").hidden = !!me; $("who").hidden = !me; $("friendsBtn").hidden = !me; $("profileBtn").hidden = !me; $("signOut").hidden = !me;
+    $("signIn").hidden = !!me; $("who").hidden = !me; $("bellBtn").hidden = !me; $("friendsBtn").hidden = !me; $("profileBtn").hidden = !me; $("signOut").hidden = !me;
     if (me && profile) $("who").textContent = profile.name + (profile.handle ? "  @" + profile.handle : "");
     $("ePinBox").hidden = !me;
     $("feed").hidden = !me; $("welcome").hidden = !!me; $("composer").hidden = !me;
@@ -84,13 +85,13 @@ export async function initSocial(ctx) {
       wasIn = true;
       await loadBlocks();
       try { await syncDown(user); } catch (e) { console.warn(e); say("Signed in, but the cloud could not be read (" + (e.code || e.message) + "). Check the Firestore rules."); }
-      paintAccount(); loadFeed(true); startChats(); if (curTab === "profile") onTab("profile"); paintNotifBtn(); delete lbCache.friends; delete lbCache.all; if (curTab === "top") loadBoard(true);
+      await loadWants(); paintAccount(); loadFeed(true); startChats(); startNotifs(); if (curTab === "profile") onTab("profile"); paintNotifBtn(); delete lbCache.friends; delete lbCache.all; if (curTab === "top") loadBoard(true);
       const nick = normalizeHandle(new URLSearchParams(location.search).get("p"));
       if (nick && profile) { history.replaceState(null, "", location.pathname + location.hash); const uid = await guard(cloud.findHandle(nick)); if (uid) openProfile(uid, { handle: nick }); else say("Nobody uses the nickname @" + nick + "."); }
     } else {
       profile = null; friends = []; blocked = new Map(); sugg = null; $("suggest").hidden = true; incoming = []; outgoing = []; $("feedFriends").replaceChildren(); $("feedList").replaceChildren(); feedAt = 0;
       if (wasIn && !keepLocal) { seen.clear(); saveSeen(); renderSeen(); }   // the list stays in the account
-      wasIn = false; keepLocal = false; stopChats(); paintAccount(); delete lbCache.friends; delete lbCache.all; if (curTab === "top") loadBoard(true);
+      wasIn = false; keepLocal = false; stopChats(); stopNotifs(); wants = new Map(); paintAccount(); delete lbCache.friends; delete lbCache.all; if (curTab === "top") loadBoard(true);
       const nick = normalizeHandle(new URLSearchParams(location.search).get("p"));
       if (nick) say("Sign in with Google to see @" + nick + "'s profile.");
     }
@@ -252,7 +253,7 @@ export async function initSocial(ctx) {
   async function renderProfilePage(uid) {
     if (!me) { $("prName").textContent = ""; $("prBody").replaceChildren(emptyCard("Sign in to see profiles.", "Sign in with Google", () => $("signIn").click())); return; }
     const mine = uid === me.uid; if (prUid !== uid) prTab = "posts"; prUid = uid;
-    $("prBody").replaceChildren(el("p", "hint", "Loading…"));
+    $("prBody").replaceChildren(...skeletons(2));
     let data = null;
     try { data = await cloud.loadProfile(uid); } catch (e) { if (e.code !== "private") { say("Could not open the profile."); } }
     if (prUid !== uid) return;
@@ -327,12 +328,21 @@ export async function initSocial(ctx) {
         const g = el("div", "sgrid");
         if (mine) { const add = el("button", "sposter addtile"); add.type = "button"; add.appendChild(icon("plus", 28)); add.appendChild(el("span", null, "Log a movie or series")); add.onclick = () => window.openLog && window.openLog(); g.appendChild(add); }
         [...items].sort((a, b) => b.updatedAt - a.updatedAt).forEach((it) => {
-          const c = el(mine ? "button" : "div", "sposter"); c.title = it.title + (it.year ? " (" + it.year + ")" : ""); if (mine) { c.type = "button"; c.onclick = () => window.openLog && window.openLog(it); }
+          const c = el("a", "sposter"); c.href = "#t/" + it.type + "/" + it.id; c.title = it.title + (it.year ? " (" + it.year + ")" : "");
           if (it.poster) { const i = el("img"); i.src = it.poster; i.alt = it.title; i.loading = "lazy"; c.appendChild(i); } else c.appendChild(el("span", null, it.title));
-          if (it.rating) c.appendChild(el("b", "srate", "★".repeat(it.rating)));
+          if (it.rating) c.appendChild(el("b", "srate", starsText(it.rating)));
           g.appendChild(c);
         });
         body.appendChild(g);
+      } else if (prTab === "want") {
+        body.appendChild(...skeletons(1));
+        cloud.loadWatchlist(uid).then((list) => {
+          if (prTab !== "want" || prUid !== uid) return; body.replaceChildren();
+          if (!list.length) { body.appendChild(emptyCard(mine ? (isPT ? "A tua lista Quero ver está vazia. Abre um filme ou série e carrega em “Quero ver”." : "Your watchlist is empty. Open a movie or series and press “Watchlist”.") : (isPT ? "Lista vazia." : "Nothing here yet."))); return; }
+          const g = el("div", "sgrid");
+          list.forEach((it) => { const c = el("a", "sposter"); c.href = "#t/" + it.type + "/" + it.id; c.title = it.title + (it.year ? " (" + it.year + ")" : ""); if (it.poster) { const i = el("img"); i.src = it.poster; i.alt = it.title; i.loading = "lazy"; c.appendChild(i); } else c.appendChild(el("span", null, it.title)); g.appendChild(c); });
+          body.appendChild(g);
+        });
       } else paintCompare(body, items, name);
     };
     $("prTabs").querySelectorAll("button").forEach((b) => { b.onclick = () => { prTab = b.dataset.t; paintTab(); }; });
@@ -384,6 +394,7 @@ export async function initSocial(ctx) {
   }
   let myReposts = new Set();
   const postKey = (it) => it.type + ":" + it.id;
+  function skeletons(n) { return Array.from({ length: n }, () => { const c = el("div", "fitem skel-card"); c.innerHTML = '<div class="sk-row"><span class="skel sk-av"></span><span class="skel sk-line w40"></span></div><div class="sk-row"><span class="skel sk-poster"></span><div class="sk-col"><span class="skel sk-line w70"></span><span class="skel sk-line w30"></span><span class="skel sk-line w90"></span><span class="skel sk-line w60"></span></div></div>'; return c; }); }
   function paintFeedList(entries, noFriends) {
     const box = $("feedList"); box.replaceChildren();
     if (noFriends) box.appendChild(emptyCard("Add friends in People to see what they are watching and what they thought of it.", "Find people", () => $("friendsBtn").click()));
@@ -402,18 +413,21 @@ export async function initSocial(ctx) {
     if (mine && !e.by) { const hd = el("div", "phead2"); hd.appendChild(who); const ed = el("button", "ghost sm pdel"); ed.type = "button"; ed.append(icon("edit", 15), el("span", null, "Edit")); ed.onclick = () => window.openLog && window.openLog(it); hd.appendChild(ed); a.appendChild(hd); } else
     a.appendChild(who);
     const body = el("div", "fbody");
-    if (it.poster) { const i = el("img"); i.src = it.poster; i.alt = ""; i.loading = "lazy"; body.appendChild(i); }
+    const tlink = "#t/" + it.type + "/" + it.id;
+    if (it.poster) { const pa = el("a", "plink"); pa.href = tlink; const i = el("img"); i.src = it.poster; i.alt = it.title; i.loading = "lazy"; pa.appendChild(i); body.appendChild(pa); }
     const d = el("div");
-    d.appendChild(el("h3", null, it.title + (it.year ? " (" + it.year + ")" : "")));
+    const h3 = el("h3"); const ta = el("a", "tlink", it.title + (it.year ? " (" + it.year + ")" : "")); ta.href = tlink; ta.translate = false; h3.appendChild(ta); d.appendChild(h3);
     const meta = el("div", "fmeta"); meta.appendChild(el("span", "ftype", typeLabel(it.type)));
-    if (it.rating) meta.appendChild(el("span", "fstars", "★".repeat(it.rating) + "☆".repeat(5 - it.rating)));
+    if (it.rating) meta.appendChild(el("span", "fstars", starsText(it.rating)));
     d.appendChild(meta);
-    const rv = el("p", it.review ? "freview" : "freview none", it.review ? "“" + it.review + "”" : "No review, just watched."); if (it.review) rv.translate = false; d.appendChild(rv);
+    const rv = el("p", it.review ? "freview" : "freview none", it.review ? "“" + it.review + "”" : "No review, just watched."); if (it.review) rv.translate = false;
+    if (it.review && it.spoiler && !mine) { const sp = el("button", "spoiler"); sp.type = "button"; sp.appendChild(el("span", null, "Contains spoilers · tap to read")); sp.onclick = () => sp.replaceWith(rv); d.appendChild(sp); } else d.appendChild(rv);
     body.appendChild(d); a.appendChild(body);
 
     socialBar(a, e, "seen", key, mine, rid, true);
     return a;
   }
+  const postTitle = (e) => (e.item ? e.item.title : e.post && e.post.text ? e.post.text.slice(0, 60) : isPT ? "uma foto" : "a photo");
   function socialBar(a, e, col, key, mine, rid, shareable) {
     // actions: like · comments · repost · send
     const bar = el("div", "pacts"), st = { likes: 0, liked: false, comments: 0, likers: [] };
@@ -434,11 +448,11 @@ export async function initSocial(ctx) {
     like.onclick = async () => {
       const on = !st.liked; st.liked = on; st.likes += on ? 1 : -1; const nm = profile.name || ""; st.likers = on ? [nm, ...st.likers] : st.likers.filter((x) => x !== nm); paint();
       like.classList.add("pop"); setTimeout(() => like.classList.remove("pop"), 300);
-      try { await cloud.setLike(e.uid, key, on, profile.name, col); } catch (err) { st.liked = !on; st.likes += on ? -1 : 1; paint(); say("Could not save the like (" + (err.code || err.message) + ")."); }
+      try { await cloud.setLike(e.uid, key, on, profile.name, col); if (on) cloud.notify(e.uid, { type: "like", name: profile.name, handle: profile.handle, title: postTitle(e), key, col }); } catch (err) { st.liked = !on; st.likes += on ? -1 : 1; paint(); say("Could not save the like (" + (err.code || err.message) + ")."); }
     };
     rp.onclick = async () => {
       const on = !rp.classList.contains("on"); rp.classList.toggle("on", on); paint();
-      try { await cloud.setRepost(e.uid, e.name, e.handle, e.item, on); if (on) { myReposts.add(rid); say("Shared on your feed."); } else myReposts.delete(rid); }
+      try { await cloud.setRepost(e.uid, e.name, e.handle, e.item, on); if (on) { cloud.notify(e.uid, { type: "repost", name: profile.name, handle: profile.handle, title: postTitle(e), key, col }); myReposts.add(rid); say("Shared on your feed."); } else myReposts.delete(rid); }
       catch (err) { rp.classList.toggle("on", !on); paint(); say(err.code === "permission-denied" ? "This post can't be shared (private profile)." : "Could not share (" + (err.code || err.message) + ")."); }
     };
     dm.onclick = () => shareWith(e.item);
@@ -454,17 +468,19 @@ export async function initSocial(ctx) {
         r.appendChild(nm);
         const t = el("span", "ctxt", c.text); t.translate = false; r.appendChild(t);
         r.appendChild(el("small", null, timeAgo(c.at)));
+        if (c.from !== me.uid) { const f = el("button", "cdel"); f.type = "button"; f.title = "Report"; f.setAttribute("aria-label", "Report"); f.appendChild(icon("flag", 13)); f.onclick = () => openReport({ owner: e.uid, col: "comment", key: col + "/" + key, comment: c.id, text: c.text }); r.appendChild(f); }
         if (c.from === me.uid || mine) { const x = el("button", "cdel", "×"); x.type = "button"; x.title = "Delete comment"; x.onclick = async () => { try { await cloud.deleteComment(e.uid, key, c.id, col); loadComments(); } catch (err) { say("Could not delete (" + (err.code || err.message) + ")."); } }; r.appendChild(x); }
         box.appendChild(r);
       }
       const f = el("form", "cform"); const inp = el("input"); inp.maxLength = 500; inp.placeholder = "Write a comment…"; inp.setAttribute("aria-label", "Write a comment…");
       const send = el("button", "cta sm", "Post"); send.type = "submit"; f.append(inp, send);
       f.onsubmit = async (ev) => { ev.preventDefault(); const v = inp.value.trim(); if (!v) return; send.disabled = true;
-        try { await cloud.addComment(e.uid, key, v, me_(), col); await loadComments(); } catch (err) { say("Could not post the comment (" + (err.code || err.message) + ")."); send.disabled = false; } };
+        try { await cloud.addComment(e.uid, key, v, me_(), col); cloud.notify(e.uid, { type: "comment", name: profile.name, handle: profile.handle, title: postTitle(e), key, col, text: v }); await loadComments(); } catch (err) { say("Could not post the comment (" + (err.code || err.message) + ")."); send.disabled = false; } };
       box.appendChild(f);
       if (!list.length) inp.focus();
     }
     bar.append(like, com); if (!mine && shareable) bar.append(rp, dm);
+    if (!mine) { const rep = el("button", "pact flag"); rep.type = "button"; rep.title = "Report"; rep.setAttribute("aria-label", "Report"); rep.appendChild(icon("flag", 16)); rep.onclick = () => openReport({ owner: e.uid, col, key, text: e.item ? e.item.review : e.post ? e.post.text : "" }); bar.appendChild(rep); }
     a.append(bar, likers, box);
     cloud.postStats(e.uid, key, col).then((x) => { Object.assign(st, x); paint(); }).catch(() => {});
   }
@@ -487,7 +503,7 @@ export async function initSocial(ctx) {
     if (!me || feedBusy || (!force && Date.now() - feedAt < 60e3)) return;
     const list = $("feedList");
     feedBusy = true;
-    if (!list.children.length) list.replaceChildren(el("p", "hint", "Loading your friends' feed…"));
+    if (!list.children.length) list.replaceChildren(...skeletons(3));
     try {
       const [peopleList, rps] = await Promise.all([cloud.friendFeed([{ uid: me.uid, name: profile.name, handle: profile.handle }, ...friends]), cloud.myReposts().catch(() => [])]);
       myReposts = new Set(rps); feedAt = Date.now();
@@ -604,6 +620,86 @@ export async function initSocial(ctx) {
     }
   }
 
+  // ---------------------------------------------------------------- notifications
+  let notifs = [], unNotifs = null;
+  const notifText = (n) => {
+    const who = n.name || (n.handle ? "@" + n.handle : isPT ? "Alguém" : "Someone"), t = n.title ? (isPT ? "“" + n.title + "”" : "“" + n.title + "”") : "";
+    const what = n.col === "posts" ? (isPT ? "a tua publicação " : "your post ") : (isPT ? "a tua crítica de " : "your review of ");
+    switch (n.type) {
+      case "like": return isPT ? who + " gostou d" + (n.col === "posts" ? "a tua publicação " : "a tua crítica de ") + t : who + " liked " + what + t;
+      case "comment": return (isPT ? who + " comentou " + what + t : who + " commented on " + what + t) + (n.text ? ": " + n.text : "");
+      case "repost": return isPT ? who + " partilhou " + what + t : who + " shared " + what + t;
+      case "request": return isPT ? who + " quer ser teu amigo" : who + " wants to be your friend";
+      case "accept": return isPT ? who + " aceitou o teu pedido de amizade" : who + " accepted your friend request";
+      default: return who;
+    }
+  };
+  function paintBell() { const n = notifs.filter((x) => !x.read).length; $("bellBadge").hidden = !n; $("bellBadge").textContent = n > 9 ? "9+" : n; }
+  function startNotifs() { if (unNotifs) unNotifs(); unNotifs = cloud.watchNotifs((list) => { notifs = list.filter((n) => !isBlocked(n.from)); paintBell(); if ($("notifDlg").open) paintNotifs(); }, (e) => console.warn("notifs", e)); }
+  function stopNotifs() { if (unNotifs) unNotifs(); unNotifs = null; notifs = []; paintBell(); }
+  function paintNotifs() {
+    const box = $("notifList"); box.replaceChildren();
+    if (!notifs.length) { box.appendChild(emptyCard(isPT ? "Ainda sem notificações. Quando alguém gostar, comentar ou te pedir amizade, aparece aqui." : "No notifications yet. Likes, comments and friend requests show up here.")); return; }
+    notifs.forEach((n) => {
+      const r = el("button", "nrow" + (n.read ? "" : " unread")); r.type = "button";
+      r.appendChild(avatar(null, n.name || n.handle, "sm"));
+      const t = el("span", "ntext"); const p = el("span", null, notifText(n)); p.translate = false; t.appendChild(p); t.appendChild(el("small", null, timeAgo(n.at))); r.appendChild(t);
+      r.onclick = () => {
+        $("notifDlg").close();
+        if (n.type === "request") { $("friendsBtn").click(); return; }
+        if (n.type === "accept") { openProfile(n.from, { handle: n.handle }); return; }
+        if (n.col === "seen" && n.key && /^(movie|tv):\d+$/.test(n.key)) { location.hash = "t/" + n.key.replace(":", "/"); return; }
+        openProfile(me.uid);
+      };
+      box.appendChild(r);
+    });
+  }
+  $("bellBtn").onclick = async () => {
+    paintNotifs(); $("notifDlg").showModal();
+    const ids = notifs.filter((n) => !n.read).map((n) => n.id);
+    if (ids.length) { notifs.forEach((n) => { n.read = true; }); paintBell(); try { await cloud.markNotifsRead(ids); } catch (e) { console.warn(e); } }
+  };
+
+  // ---------------------------------------------------------------- watchlist
+  let wants = new Map();
+  async function loadWants() { try { wants = new Map((await cloud.myWatchlist()).map((w) => [w.key, w])); } catch (e) { wants = new Map(); } }
+  async function toggleWant(item) {
+    if (!me) { say(isPT ? "Entra com Google para guardares a tua lista Quero ver." : "Sign in with Google to keep a watchlist."); return null; }
+    const k = item.type + ":" + item.id, on = !wants.has(k);
+    if (on) wants.set(k, { key: k, ...item }); else wants.delete(k);
+    try { await cloud.setWant(item, on); say(on ? (isPT ? "Adicionado ao Quero ver." : "Added to your watchlist.") : (isPT ? "Tirado do Quero ver." : "Removed from your watchlist.")); }
+    catch (e) { if (on) wants.delete(k); else wants.set(k, item); say("Could not save (" + (e.code || e.message) + ")."); }
+    return wants.has(k);
+  }
+
+  // ---------------------------------------------------------------- report
+  let reportFor = null;
+  function openReport(r) { if (!me) return; reportFor = r; $("reportForm").reset(); $("reportDlg").showModal(); }
+  $("reportForm").onsubmit = async (ev) => {
+    ev.preventDefault(); if (!reportFor) return;
+    const reason = (new FormData($("reportForm")).get("rr")) || "other";
+    try { await cloud.report({ ...reportFor, reason }); $("reportDlg").close(); say(isPT ? "Obrigado. A denúncia foi enviada." : "Thanks, your report was sent."); }
+    catch (e) { say("Could not send (" + (e.code || e.message) + ")."); }
+  };
+
+  // ---------------------------------------------------------------- friends on a title page
+  async function titleFriends(item) {
+    const box = $("tFriends"), avg = $("tAvg"); avg.textContent = "";
+    if (!me) { box.replaceChildren(emptyCard(isPT ? "Entra para veres o que os teus amigos acharam." : "Sign in to see what your friends thought.", "Sign in with Google", () => $("signIn").click())); return; }
+    box.replaceChildren(...skeletons(1));
+    const key = item.type + ":" + item.id;
+    const people = [{ uid: me.uid, name: profile.name, handle: profile.handle, photo: profile.photo }, ...friends.filter((f) => !isBlocked(f.uid))];
+    let rows = [];
+    try { rows = await cloud.ratingsOn(key, people); } catch (e) { console.warn(e); }
+    if (location.hash !== "#t/" + item.type + "/" + item.id) return;
+    const rated = rows.filter((r) => r.item.rating);
+    if (rated.length) { const a = rated.reduce((s2, r) => s2 + r.item.rating, 0) / rated.length; avg.textContent = (isPT ? "Média dos amigos " : "Friends' average ") + "★ " + a.toFixed(1).replace(".", isPT ? "," : ".") + " · " + rated.length + (isPT ? (rated.length === 1 ? " nota" : " notas") : rated.length === 1 ? " rating" : " ratings"); }
+    box.replaceChildren();
+    if (!rows.length) { box.appendChild(emptyCard(isPT ? "Nenhum amigo registou este título ainda. Sê o primeiro!" : "None of your friends has logged this yet. Be the first!")); return; }
+    rows.sort((a2, b2) => (b2.item.review ? 1 : 0) - (a2.item.review ? 1 : 0) || b2.item.updatedAt - a2.item.updatedAt)
+      .forEach((r) => box.appendChild(postCard({ uid: r.uid, name: r.name || "@" + r.handle, handle: r.handle, photo: r.photo || (people.get ? null : null), item: r.item, at: r.item.updatedAt, by: null })));
+  }
+
   // ---------------------------------------------------------------- chat
   let chats = [], unChats = null, unMsgs = null, chatWith = null, pendingShare = null, lastSeenAt = 0;
   const people = new Map();   // uid -> {name, handle, photo}
@@ -642,7 +738,7 @@ export async function initSocial(ctx) {
     box.replaceChildren(...rows);
   }
   function shareCard(sh, cls) {
-    const a = el("a", "shcard " + (cls || "")); a.href = "https://www.themoviedb.org/" + sh.type + "/" + sh.id; a.target = "_blank"; a.rel = "noopener noreferrer";
+    const a = el("a", "shcard " + (cls || "")); a.href = "#t/" + sh.type + "/" + sh.id;
     if (sh.poster) { const i = el("img"); i.src = sh.poster; i.alt = ""; i.loading = "lazy"; a.appendChild(i); }
     const d = el("span"); d.appendChild(el("b", null, sh.title)); d.appendChild(el("small", null, [sh.year, typeLabel(sh.type)].filter(Boolean).join(" · "))); a.appendChild(d);
     return a;
@@ -735,6 +831,7 @@ export async function initSocial(ctx) {
 
   return {
     enabled: true, signedIn: () => !!me, onTab, shareWith,
+    isWanted: (k) => wants.has(k), toggleWant, titleFriends,
     seenChanged: () => { feedAt = 0; if (curTab === "profile" && me && prUid === me.uid) renderProfilePage(me.uid); else if (curTab === "feed") setTimeout(() => loadFeed(true), 800); },
     readBackdrops: () => cloud.readBackdrops(), writeBackdrops: (m) => (me ? cloud.writeBackdrops(m) : null),
     upsert: (item) => { if (me) guard(cloud.saveItem(item)); },

@@ -54,7 +54,15 @@ test("pinned recommendation", () => {
   assert.equal(sanitizePinned({ type: "x", id: 1 }), null);
 });
 
-import { sanitizeProfile, validPhoto, pairId } from "../seen.js";
+import { sanitizeProfile, validPhoto, pairId, starsText } from "../seen.js";
+test("half stars and spoilers", () => {
+  assert.equal(sanitizeItem({ type: "movie", id: 1, rating: 3.5 }).rating, 3.5);
+  assert.equal(sanitizeItem({ type: "movie", id: 1, rating: 3.3 }).rating, null);
+  assert.equal(sanitizeItem({ type: "movie", id: 1, rating: 0 }).rating, null);
+  assert.equal(sanitizeItem({ type: "movie", id: 1, spoiler: true }).spoiler, true);
+  assert.equal("spoiler" in sanitizeItem({ type: "movie", id: 1, spoiler: "yes" }), false);
+  assert.equal(starsText(3.5), "★★★½"); assert.equal(starsText(5), "★★★★★"); assert.equal(starsText(null), "");
+});
 test("profile sanitising", () => {
   const p = sanitizeProfile({ name: "Ana", handle: "@Ana_1", photo: "data:image/svg+xml;base64,AAA", bio: "b".repeat(500), visibility: "weird" });
   assert.equal(p.handle, "ana_1"); assert.equal(p.photo, null); assert.equal(p.bio.length, 300); assert.equal(p.visibility, "friends");

@@ -4,14 +4,17 @@ export const keyOf = (x) => x.type + ":" + x.id;
 const str = (v, n) => String(v == null ? "" : v).slice(0, n);
 
 /** Returns a clean item (only the allowed fields) or null if it is not a valid title. */
+/** 3.5 -> "★★★½" */
+export const starsText = (n) => (n ? "★".repeat(Math.floor(n)) + (n % 1 ? "½" : "") : "");
 export function sanitizeItem(x) {
   if (!x || (x.type !== "movie" && x.type !== "tv") || !Number.isInteger(Number(x.id))) return null;
   const r = Number(x.rating);
   return {
     type: x.type, id: Number(x.id), title: str(x.title || "Unknown title", 200), year: str(x.year, 4),
     poster: typeof x.poster === "string" && x.poster.startsWith("https://image.tmdb.org/") && x.poster.length <= 200 ? x.poster : null,
-    rating: Number.isInteger(r) && r >= 1 && r <= 5 ? r : null,
+    rating: Number.isFinite(r) && r >= 0.5 && r <= 5 && Number.isInteger(r * 2) ? r : null,
     review: str(x.review, 600), updatedAt: Number.isFinite(Number(x.updatedAt)) ? Number(x.updatedAt) : 0,
+    ...(x.spoiler === true ? { spoiler: true } : {}),
   };
 }
 

@@ -1,8 +1,8 @@
 // Firebase wrapper (Auth with Google + Firestore). Loaded only when firebase-config.js has a config.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser, reauthenticateWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, query, where, documentId, limit, orderBy, getCountFromServer, onSnapshot, addDoc, limitToLast } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { sanitizeItem, keyOf, sanitizeProfile, pairId } from "./seen.js?v=1795193773";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, query, where, documentId, limit, orderBy, getCountFromServer, onSnapshot, addDoc, limitToLast, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { sanitizeItem, keyOf, sanitizeProfile, pairId } from "./seen.js?v=1795196790";
 
 export async function init(config) {
   const app = initializeApp(config), auth = getAuth(app), db = getFirestore(app), provider = new GoogleAuthProvider();
@@ -132,6 +132,7 @@ export async function init(config) {
     async sendRequest(toUid, toHandle, fromName, fromHandle) {
       const uid = me();
       await setDoc(doc(db, "requests", uid + "_" + toUid), reqOut({ from: uid, to: toUid, fromName, fromHandle, toHandle, createdAt: Date.now() }));
+      this.notify(toUid, { type: "request", name: fromName, handle: fromHandle });
     },
     async cancelRequest(from, to) { await deleteDoc(doc(db, "requests", from + "_" + to)); },
     /** req = the incoming request; mine = my own {name, handle}. Both names are copied so friends with private profiles still show up. */
@@ -142,6 +143,7 @@ export async function init(config) {
       bt.set(doc(db, "friendships", pairId(uid, fromUid)), { a: meFirst ? uid : fromUid, b: meFirst ? fromUid : uid, ha: A.h, na: A.n, hb: B.h, nb: B.n, createdAt: Date.now() });
       bt.delete(doc(db, "requests", fromUid + "_" + uid));
       await bt.commit();
+      this.notify(fromUid, { type: "accept", name: mine.name, handle: mine.handle });
     },
     async removeFriend(uid2) { await deleteDoc(doc(db, "friendships", pairId(me(), uid2))); },
 
@@ -170,9 +172,42 @@ export async function init(config) {
     async setRepost(owner, ownerName, ownerHandle, item, on) {
       const s = sanitizeItem(item), ref = doc(db, "users", me(), "reposts", owner + "_" + keyOf(s));
       if (!on) return deleteDoc(ref);
-      const snap = { type: s.type, id: s.id, title: s.title, year: s.year || "", poster: s.poster || null, rating: s.rating || null, review: s.review || "", updatedAt: s.updatedAt };
+      const snap = { type: s.type, id: s.id, title: s.title, year: s.year || "", poster: s.poster || null, rating: s.rating || null, review: s.review || "", updatedAt: s.updatedAt, ...(s.spoiler ? { spoiler: true } : {}) };
       Object.keys(snap).forEach((k) => snap[k] === undefined && delete snap[k]);
       await setDoc(ref, { owner, ownerName: String(ownerName || "").slice(0, 40), ownerHandle: String(ownerHandle || "").slice(0, 20), item: snap, at: Date.now() });
+    },
+
+    // ------------------------------------------------ watchlist ("want to watch")
+    async myWatchlist() { return (await getDocs(collection(db, "users", me(), "watchlist"))).docs.map((d) => ({ key: d.id, ...d.data() })); },
+    async loadWatchlist(uid) { try { return (await getDocs(query(collection(db, "users", uid, "watchlist"), orderBy("at", "desc"), limit(200)))).docs.map((d) => ({ key: d.id, ...d.data() })); } catch (e) { return []; } },
+    async setWant(item, on) {
+      const s = sanitizeItem(item), ref = doc(db, "users", me(), "watchlist", keyOf(s));
+      if (!on) return deleteDoc(ref);
+      await setDoc(ref, { type: s.type, id: s.id, title: s.title, year: s.year || "", poster: s.poster || null, at: Date.now() });
+    },
+    // ------------------------------------------------ friends' ratings of one title
+    async ratingsOn(key, people) {
+      const one = async (p) => { try { const d = await getDoc(doc(db, "users", p.uid, "seen", key)); return d.exists() ? { ...p, item: sanitizeItem(d.data()) } : null; } catch (e) { return null; } };
+      return (await Promise.all(people.slice(0, 60).map(one))).filter((x) => x && x.item);
+    },
+    // ------------------------------------------------ notifications
+    async notify(to, n) {
+      const uid = me(); if (!to || to === uid) return;
+      const d = { type: n.type, from: uid, name: String(n.name || "").slice(0, 40), handle: String(n.handle || "").slice(0, 20), at: Date.now(), read: false };
+      if (n.title) d.title = String(n.title).slice(0, 200);
+      if (n.key) d.key = String(n.key).slice(0, 40);
+      if (n.col) d.col = n.col;
+      if (n.text) d.text = String(n.text).slice(0, 140);
+      try { await addDoc(collection(db, "users", to, "notifs"), d); } catch (e) { /* blocked or rules not updated: ignore */ }
+    },
+    watchNotifs(cb, onErr) { return onSnapshot(query(collection(db, "users", me(), "notifs"), orderBy("at", "desc"), limit(40)), (s) => cb(s.docs.map((d) => ({ id: d.id, ...d.data() }))), onErr); },
+    async markNotifsRead(ids) { const uid = me(); for (const part of chunks(ids)) { const b = writeBatch(db); part.forEach((id) => b.update(doc(db, "users", uid, "notifs", id), { read: true })); await b.commit(); } },
+    // ------------------------------------------------ reports (read only in the Firebase console)
+    async report(r) {
+      const d = { from: me(), owner: String(r.owner || ""), col: r.col, key: String(r.key || "").slice(0, 60), reason: r.reason, at: Date.now() };
+      if (r.comment) d.comment = String(r.comment).slice(0, 60);
+      if (r.text) d.text = String(r.text).slice(0, 300);
+      await addDoc(collection(db, "reports"), d);
     },
 
     // ------------------------------------------------ chat (friends only; chat id = friendship id)
@@ -202,7 +237,7 @@ export async function init(config) {
 
     async deleteAccount(handle) {
       const uid = me(), f = collection(db, "friendships"), r = collection(db, "requests");
-      const lists = await Promise.all([getDocs(seenCol(uid)), getDocs(collection(db, "users", uid, "reposts")), getDocs(collection(db, "users", uid, "blocks")), getDocs(collection(db, "users", uid, "posts")), getDocs(query(f, where("a", "==", uid))), getDocs(query(f, where("b", "==", uid))), getDocs(query(r, where("to", "==", uid))), getDocs(query(r, where("from", "==", uid)))]);
+      const lists = await Promise.all([getDocs(seenCol(uid)), getDocs(collection(db, "users", uid, "reposts")), getDocs(collection(db, "users", uid, "blocks")), getDocs(collection(db, "users", uid, "posts")), getDocs(collection(db, "users", uid, "watchlist")), getDocs(collection(db, "users", uid, "notifs")), getDocs(query(f, where("a", "==", uid))), getDocs(query(f, where("b", "==", uid))), getDocs(query(r, where("to", "==", uid))), getDocs(query(r, where("from", "==", uid)))]);
       for (const l of lists) await deleteAll(l.docs);
       try {
         const chats = await getDocs(query(collection(db, "chats"), where("members", "array-contains", uid)));

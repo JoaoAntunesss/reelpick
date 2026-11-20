@@ -1,11 +1,11 @@
-import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle, tasteGenreIds, hashStr, mulberry32, dayKey } from "./query.js?v=1795193773";
-import { DEMO, DEMO_GENRES } from "./demo.js?v=1795193773";
-import { supported, createReel3D } from "./reel3d.js?v=1795193773";
-import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES } from "./seen.js?v=1795193773";
-import { initSocial } from "./social.js?v=1795193773";
-import { startI18n, tmdbLang, isPT, setLang } from "./i18n.js?v=1795193773";
-import { icon } from "./icons.js?v=1795193773";
-import { FILMS, PLAIN, validPath, cacheKey } from "./themes.js?v=1795193773";
+import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle, tasteGenreIds, hashStr, mulberry32, dayKey } from "./query.js?v=1795196790";
+import { DEMO, DEMO_GENRES } from "./demo.js?v=1795196790";
+import { supported, createReel3D } from "./reel3d.js?v=1795196790";
+import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES, starsText } from "./seen.js?v=1795196790";
+import { initSocial } from "./social.js?v=1795196790";
+import { startI18n, tmdbLang, isPT, setLang } from "./i18n.js?v=1795196790";
+import { icon } from "./icons.js?v=1795196790";
+import { FILMS, PLAIN, validPath, cacheKey } from "./themes.js?v=1795196790";
 startI18n();
 { const lb = document.getElementById("langBtn"); if (lb) { lb.textContent = isPT ? "English" : "Português"; lb.lang = isPT ? "en" : "pt-PT"; lb.title = isPT ? "Switch to English" : "Mudar para português"; lb.onclick = () => setLang(isPT ? "en" : "pt"); } }
 
@@ -23,6 +23,14 @@ const state = {
 };
 let key = store.get("rp_key");
 let demo = !key;
+// Shared TMDB access through the AW server, so nobody needs their own key. A personal key still wins if set.
+const PROXY = "https://europe-west1-aw-sites-e31c3.cloudfunctions.net/tmdb";
+let proxy = false;
+async function checkProxy() {
+  if (key) return;
+  try { const c = new AbortController(), t = setTimeout(() => c.abort(), 5000); const r = await fetch(PROXY + "?path=/genre/movie/list&language=en-US", { signal: c.signal }); clearTimeout(t); proxy = r.ok; } catch (e) { proxy = false; }
+  demo = !key && !proxy;
+}
 let genreList = [];            // [{name, movie, tv}]
 let providerList = [];         // [{id, name, logo}]
 const seen = new Map();   // "type:id" -> {id,type,title,year,poster,rating,review,updatedAt}
@@ -43,7 +51,10 @@ function openEditor(k) {
   $("eReview").value = it.review || ""; $("ePinText").value = ""; paintStars(it.rating || 0); $("seenEdit").hidden = false; $("seenEdit").dataset.rating = it.rating || 0;
   $("ePinBox").hidden = !social.signedIn(); $("seenEdit").scrollIntoView({ block: "nearest" });
 }
-function paintStars(n) { $("seenEdit").dataset.rating = n; [...$("eStars").children].forEach((b, i) => b.classList.toggle("on", i < n)); }
+// star rows: tap a star for a full star, tap it again for half, a third time to clear
+const starRow = (row, n) => [...row.children].forEach((b, i) => { b.classList.toggle("on", i + 1 <= n); b.classList.toggle("half", i + 0.5 === n); });
+const nextStar = (cur, i) => (cur === i ? i - 0.5 : cur === i - 0.5 ? 0 : i);
+function paintStars(n) { $("seenEdit").dataset.rating = n; starRow($("eStars"), n); }
 function renderSeen() {
   const g = $("seenGrid"); g.replaceChildren();
   if (!seen.size) { g.appendChild(el("p", null, "Nothing here yet. Press “Seen it — spin again” on a result to add it.")); return; }
@@ -51,7 +62,7 @@ function renderSeen() {
     const d = el("div", "sitem cl"); d.tabIndex = 0; d.setAttribute("role", "button"); d.setAttribute("aria-label", "Rate or review " + it.title);
     if (it.poster) { const i = el("img"); i.src = it.poster; i.alt = ""; i.loading = "lazy"; d.appendChild(i); d.appendChild(el("div", "cap", it.title)); }
     else d.appendChild(el("div", "ph", it.title + (it.year ? " (" + it.year + ")" : "")));
-    if (it.rating) d.appendChild(el("div", "rt", "★ " + it.rating));
+    if (it.rating) d.appendChild(el("div", "rt", starsText(it.rating)));
     const x = el("button", null, "×"); x.type = "button"; x.title = "Remove from seen"; x.setAttribute("aria-label", "Remove " + it.title + " from seen list");
     x.onclick = (ev) => { ev.stopPropagation(); seen.delete(k); saveSeen(); social.remove(k); if (editing === k) $("seenEdit").hidden = true; renderSeen(); };
     d.onclick = () => openEditor(k); d.onkeydown = (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openEditor(k); } };
@@ -69,6 +80,12 @@ const say = (t) => {
 
 // ------------------------------------------------------------------ TMDB
 async function tmdb(path, params = new URLSearchParams()) {
+  if (!key && proxy) {
+    const q = new URLSearchParams(params); q.set("path", path);
+    const r = await fetch(PROXY + "?" + q);
+    if (!r.ok) throw new Error("TMDB error " + r.status + ". Try again.");
+    return r.json();
+  }
   const headers = { accept: "application/json" };
   const p = new URLSearchParams(params);
   if (key.length > 40) headers.Authorization = "Bearer " + key; else p.set("api_key", key);
@@ -158,8 +175,9 @@ function initStatic() {
   $("spin").onclick = () => spin();
   $("seen").onclick = () => { if (current) markSeen(current); spin(); };
   $("rSend").onclick = () => { if (current && social.shareWith) social.shareWith(current); };
+  $("rWant").onclick = async () => { if (current && social.toggleWant) { await social.toggleWant(current); paintWant($("rWant"), current); } };
   $("rRate").onclick = () => { if (!current) return; const k = markSeen(current); renderSeen(); $("seenClear").textContent = "Clear all"; $("seenClear").dataset.armed = ""; $("seenDlg").showModal(); openEditor(k); };
-  for (let i = 1; i <= 5; i++) { const b = el("button", null, "★"); b.type = "button"; b.setAttribute("aria-label", i + " star" + (i > 1 ? "s" : "")); b.onclick = () => paintStars(Number($("seenEdit").dataset.rating) === i ? 0 : i); $("eStars").appendChild(b); }
+  for (let i = 1; i <= 5; i++) { const b = el("button", null, "★"); b.type = "button"; b.setAttribute("aria-label", i + " star" + (i > 1 ? "s" : "")); b.onclick = () => paintStars(nextStar(Number($("seenEdit").dataset.rating) || 0, i)); $("eStars").appendChild(b); }
   $("eSave").onclick = () => {
     const it = seen.get(editing); if (!it) return; const r = Number($("seenEdit").dataset.rating) || null;
     const item = sanitizeItem({ ...it, rating: r, review: $("eReview").value.trim(), updatedAt: Date.now() }); seen.set(editing, item); saveSeen(); social.upsert(item); renderSeen(); say("Saved.");
@@ -183,13 +201,13 @@ function initStatic() {
     } catch (e) { say("That file is not a valid ReelPick list."); }
     $("seenFile").value = "";
   };
-  const paintKey = () => { const b = $("keyTop"); b.classList.toggle("ok", !!key); b.textContent = key ? "TMDB connected" : "Add your free TMDB key"; b.title = key ? "Change or remove your key" : "Unlock every movie and series plus platform filters"; };
+  const paintKey = () => { document.querySelector(".keybar").hidden = !key && proxy; $("howto").hidden = !key && proxy; const b = $("keyTop"); b.classList.toggle("ok", !!key); b.textContent = key ? "TMDB connected" : "Add your free TMDB key"; b.title = key ? "Change or remove your key" : "Unlock every movie and series plus platform filters"; };
   const openKey = () => { $("keyInput").value = key; $("dlg").showModal(); };
   $("keyBtn").onclick = openKey; $("keyTop").onclick = openKey; paintKey();
   $("dlg").addEventListener("close", () => {
     const v = $("dlg").returnValue;
-    if (v === "save") { key = $("keyInput").value.trim(); store.set("rp_key", key); demo = !key; paintKey(); state.providers.clear(); say(""); loadMeta(); }
-    else if (v === "demo") { key = ""; store.set("rp_key", ""); demo = true; paintKey(); loadMeta(); }
+    if (v === "save") { key = $("keyInput").value.trim(); store.set("rp_key", key); demo = !key && !proxy; paintKey(); state.providers.clear(); say(""); loadMeta(); }
+    else if (v === "demo") { key = ""; store.set("rp_key", ""); demo = !proxy; paintKey(); loadMeta(); }
   });
 }
 const soundLabel = () => { $("sound").textContent = "Sound: " + (state.sound ? "on" : "off"); $("sound").setAttribute("aria-pressed", state.sound); };
@@ -321,7 +339,8 @@ async function showResult(it) {
     pv.appendChild(el("small", null, "included in " + REGIONS[state.region] + " (via JustWatch)"));
   } else if (!demo) pv.appendChild(el("small", null, "Not on a subscription platform in " + REGIONS[state.region] + " right now."));
   $("rTrailer").href = "https://www.youtube.com/results?search_query=" + encodeURIComponent(info.title + " " + info.year + " trailer");
-  $("rSend").hidden = !social.signedIn(); $("result").hidden = false; $("result").classList.remove("flip"); void $("result").offsetWidth; $("result").classList.add("flip");
+  $("rSend").hidden = !social.signedIn(); $("rWant").hidden = !social.signedIn() || !social.isWanted; $("rMore").href = "#t/" + it.type + "/" + it.id; paintWant($("rWant"), it);
+  $("result").hidden = false; $("result").classList.remove("flip"); void $("result").offsetWidth; $("result").classList.add("flip");
   $("result").scrollIntoView({ block: "nearest", behavior: reduced() ? "auto" : "smooth" });
 }
 
@@ -391,7 +410,7 @@ async function dailyPick(force) {
   box.replaceChildren();
   if (!item) { box.appendChild(el("p", "hint", "No new suggestion for these tastes right now. Try other genres or clear your seen list.")); const b = el("button", "ghost", "Change my tastes"); b.type = "button"; b.onclick = openTastes; box.appendChild(b); return; }
   if (item.poster) { const i = el("img"); i.src = item.poster; i.alt = ""; box.appendChild(i); }
-  const d = el("div"); d.appendChild(el("h3", null, item.title));
+  const d = el("div"); const h = el("h3"); const ha = el("a", "tlink", item.title); ha.href = "#t/" + item.type + "/" + item.id; ha.translate = false; h.appendChild(ha); d.appendChild(h);
   d.appendChild(el("div", "meta", [item.year, item.type === "tv" ? "Series" : "Movie", item.rating ? "★ " + Number(item.rating).toFixed(1) : ""].filter(Boolean).join(" · ")));
   d.appendChild(el("div", "why", "Because you like " + tastes.genres.slice(0, 3).join(", ")));
   d.appendChild(el("p", "ov", item.overview || ""));
@@ -419,6 +438,7 @@ function route() {
   const h = decodeURIComponent(location.hash.slice(1));
   if (TABS.includes(h)) return showTab(h);
   if (h.startsWith("u/")) return showTab("profile");
+  const tm = /^t\/(movie|tv)\/(\d+)$/.exec(h); if (tm) { showTab("title"); renderTitle(tm[1], Number(tm[2])); return; }
   const target = h && document.getElementById(h), view = target && target.closest(".view");
   showTab(view ? view.dataset.view : "feed", view ? h : null);
 }
@@ -437,16 +457,83 @@ $("installBtn").onclick = async () => {
 };
 if (!standalone() && /iphone|ipad|ipod/i.test(navigator.userAgent)) $("installWrap").hidden = false;
 
+function paintWant(b, it) { const on = social.isWanted && social.isWanted(it.type + ":" + it.id); b.textContent = on ? "In your watchlist" : "+ Watchlist"; b.classList.toggle("on", !!on); }
+
+// ------------------------------------------------------------------ title page (#t/movie/123)
+const titleCache = new Map();
+async function renderTitle(type, id) {
+  const k = type + ":" + id, known = seen.get(k) || (current && current.type === type && current.id === id ? current : null);
+  $("tName").textContent = known ? known.title : ""; $("tMeta").textContent = ""; $("tTagline").textContent = ""; $("tOverview").textContent = "";
+  $("tCrew").replaceChildren(); $("tWhere").replaceChildren(); $("tCast").replaceChildren(); $("tActions").replaceChildren(); $("tHero").style.backgroundImage = "";
+  $("tPoster").src = (known && known.poster) || ""; $("tPoster").hidden = !(known && known.poster);
+  $("v-title").classList.add("loading");
+  let d = titleCache.get(k);
+  if (!d && !demo) {
+    try {
+      d = await tmdb("/" + type + "/" + id, new URLSearchParams({ language: tmdbLang, append_to_response: "credits,watch/providers,videos" }));
+      if (!d.overview && isPT) { try { const en = await tmdb("/" + type + "/" + id, new URLSearchParams({ language: "en-US" })); d.overview = en.overview; if (!d.tagline) d.tagline = en.tagline; } catch (e) { /* keep */ } }
+      titleCache.set(k, d);
+    } catch (e) { say(e.message); }
+  }
+  if (location.hash !== "#t/" + type + "/" + id) return;
+  $("v-title").classList.remove("loading");
+  const demoItem = DEMO.find((x) => x.type === type && x.id === id);
+  if (!d) $("v-title").classList.add("nohero");
+  const item = d ? norm(d, type) : known || (demoItem ? { ...demoItem, poster: null } : { id, type, title: "Unknown title", year: "" });
+  if (d) {
+    item.title = d.title || d.name || item.title;
+    if (d.backdrop_path) $("tHero").style.backgroundImage = "url(" + IMG + "w1280" + d.backdrop_path + ")";
+    $("v-title").classList.toggle("nohero", !d.backdrop_path);
+    if (d.poster_path) { $("tPoster").src = IMG + "w342" + d.poster_path; $("tPoster").hidden = false; }
+  }
+  $("tName").textContent = item.title;
+  const runtime = d && (d.runtime || (d.episode_run_time || [])[0]), seasons = d && d.number_of_seasons;
+  $("tMeta").textContent = [item.year, type === "tv" ? "Series" + (seasons ? " · " + seasons + " season" + (seasons > 1 ? "s" : "") : "") : "Movie", runtime ? runtime + " min" : "",
+    d && d.genres ? d.genres.map((g) => g.name).join(", ") : "", d && d.vote_average ? "★ " + d.vote_average.toFixed(1) + " TMDB" : ""].filter(Boolean).join(" · ");
+  $("tTagline").textContent = (d && d.tagline) || ""; $("tTagline").hidden = !(d && d.tagline);
+  $("tOverview").textContent = (d && d.overview) || (demoItem && demoItem.overview) || "";
+  // crew
+  const crew = $("tCrew"), addCrew = (label, names) => { if (!names.length) return; const w = el("div"); w.appendChild(el("dt", null, label)); const dd = el("dd", null, names.join(", ")); dd.translate = false; w.appendChild(dd); crew.appendChild(w); };
+  if (d && d.credits) {
+    if (type === "movie") { addCrew("Directed by", d.credits.crew.filter((c) => c.job === "Director").map((c) => c.name)); addCrew("Written by", [...new Set(d.credits.crew.filter((c) => c.department === "Writing").map((c) => c.name))].slice(0, 3)); }
+    else addCrew("Created by", (d.created_by || []).map((c) => c.name));
+    const cast = d.credits.cast.slice(0, 12);
+    $("tCastSec").hidden = !cast.length;
+    cast.forEach((c) => { const ch = el("div", "castchip"); ch.appendChild(el("b", null, c.name)); if (c.character) ch.appendChild(el("span", null, c.character)); $("tCast").appendChild(ch); });
+  } else $("tCastSec").hidden = true;
+  // where to watch in my country
+  const wp = d && d["watch/providers"] && d["watch/providers"].results && d["watch/providers"].results[state.region];
+  const where = $("tWhere");
+  if (wp) {
+    [["flatrate", "Stream"], ["rent", "Rent"], ["buy", "Buy"]].forEach(([kk, label]) => {
+      if (!wp[kk] || !wp[kk].length) return; const row = el("div", "wrow"); row.appendChild(el("span", "wl", label));
+      wp[kk].slice(0, 8).forEach((p) => { const i = el("img"); i.src = IMG + "w92" + p.logo_path; i.alt = p.provider_name; i.title = p.provider_name; row.appendChild(i); });
+      where.appendChild(row);
+    });
+    if (where.children.length) where.appendChild(el("small", "hint", "Availability in " + REGIONS[state.region] + " (via JustWatch)"));
+  } else if (d) where.appendChild(el("small", "hint", "Not on a subscription platform in " + REGIONS[state.region] + " right now."));
+  // actions
+  const acts = $("tActions"), mk = (label, cls, fn, ic) => { const b = el("button", cls); b.type = "button"; if (ic) b.appendChild(icon(ic, 17)); b.appendChild(el("span", null, label)); b.onclick = fn; acts.appendChild(b); return b; };
+  const mine = seen.get(k);
+  mk(mine ? "Edit my review" : "Log or rate", "cta", () => openLog(mine || item), mine ? "edit" : "plus");
+  if (social.toggleWant) { const wb = mk("+ Watchlist", "ghost", async () => { await social.toggleWant(item); paintWant(wb.lastChild, item); wb.classList.toggle("on", social.isWanted(k)); }, "bookmark"); paintWant(wb.lastChild, item); wb.classList.toggle("on", social.isWanted(k)); }
+  const tr = d && d.videos && d.videos.results.find((v) => v.site === "YouTube" && v.type === "Trailer");
+  const ta = el("a", "btn ghostbtn"); ta.appendChild(icon("play", 16)); ta.appendChild(el("span", null, "Trailer")); ta.target = "_blank"; ta.rel = "noopener noreferrer";
+  ta.href = tr ? "https://www.youtube.com/watch?v=" + encodeURIComponent(tr.key) : "https://www.youtube.com/results?search_query=" + encodeURIComponent(item.title + " " + item.year + " trailer"); acts.appendChild(ta);
+  if (social.shareWith && social.signedIn()) mk("Send to a friend", "ghost", () => social.shareWith(item), "send");
+  if (social.titleFriends) social.titleFriends(item); else $("tFriends").replaceChildren();
+}
+
 // ------------------------------------------------------------------ log / edit what I watched (search TMDB)
 let logItem = null, logTimer = 0, logSeq = 0;
-function logStars(n) { $("logEdit").dataset.rating = n; [...$("logStars").children].forEach((b, i) => b.classList.toggle("on", i < n)); }
-for (let i = 1; i <= 5; i++) { const b = el("button", null, "★"); b.type = "button"; b.setAttribute("aria-label", i + " star" + (i > 1 ? "s" : "")); b.onclick = () => logStars(Number($("logEdit").dataset.rating) === i ? 0 : i); $("logStars").appendChild(b); }
+function logStars(n) { $("logEdit").dataset.rating = n; starRow($("logStars"), n); $("logStarTxt").textContent = n ? String(n).replace(".", isPT ? "," : ".") + " / 5" : ""; }
+for (let i = 1; i <= 5; i++) { const b = el("button", null, "★"); b.type = "button"; b.setAttribute("aria-label", i + " star" + (i > 1 ? "s" : "")); b.onclick = () => logStars(nextStar(Number($("logEdit").dataset.rating) || 0, i)); $("logStars").appendChild(b); }
 function logShowEdit(it) {
   logItem = it; const k = it.type + ":" + it.id, cur = seen.get(k);
   $("logFind").hidden = true; $("logEdit").hidden = false; $("logH").textContent = cur ? "Edit" : "Log a movie or series";
   $("logPoster").src = it.poster || ""; $("logPoster").hidden = !it.poster;
   $("logTitle").textContent = it.title; $("logMeta").textContent = [it.year, it.type === "tv" ? "Series" : "Movie"].filter(Boolean).join(" · ");
-  $("logReview").value = (cur && cur.review) || ""; logStars((cur && cur.rating) || 0);
+  $("logReview").value = (cur && cur.review) || ""; logStars((cur && cur.rating) || 0); $("logSpoiler").checked = !!(cur && cur.spoiler);
   $("logRemove").hidden = !cur; $("logRemove").dataset.armed = ""; $("logRemove").textContent = "Remove from watched";
 }
 function logShowFind() { logItem = null; $("logFind").hidden = false; $("logEdit").hidden = true; $("logH").textContent = "Log a movie or series"; setTimeout(() => $("logQ").focus(), 50); }
@@ -479,14 +566,17 @@ $("logBack").onclick = logShowFind;
 $("logSave").onclick = () => {
   if (!logItem) return;
   const k = markSeen(logItem), cur = seen.get(k), r = Number($("logEdit").dataset.rating) || null;
-  const item = sanitizeItem({ ...cur, rating: r, review: $("logReview").value.trim(), updatedAt: Date.now() });
+  const rv = $("logReview").value.trim(), base = { ...cur }; delete base.spoiler;
+  const item = sanitizeItem({ ...base, rating: r, review: rv, spoiler: !!rv && $("logSpoiler").checked, updatedAt: Date.now() });
   seen.set(k, item); saveSeen(); social.upsert(item); renderSeen();
   $("logDlg").close(); say("Saved."); if (social.seenChanged) social.seenChanged();
+  if (social.isWanted && social.isWanted(k) && social.toggleWant) social.toggleWant(item);   // watched: leave the watchlist
+  if (/^#t\//.test(location.hash)) route();
 };
 $("logRemove").onclick = () => {
   const b = $("logRemove"); if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Click again to confirm"; return; }
   const k = logItem.type + ":" + logItem.id; seen.delete(k); saveSeen(); social.remove(k); renderSeen();
-  $("logDlg").close(); say("Removed."); if (social.seenChanged) social.seenChanged();
+  $("logDlg").close(); say("Removed."); if (social.seenChanged) social.seenChanged(); if (/^#t\//.test(location.hash)) route();
 };
 function openLog(it) {
   $("logQ").value = ""; $("logResults").replaceChildren();
@@ -512,7 +602,7 @@ async function resolveBackdrops() {
   if (!missing().length) return;
   if (social.readBackdrops) { const shared = await social.readBackdrops(); Object.entries(shared || {}).forEach(([k, v]) => { if (validPath(v)) bdPaths[k] = v; }); }
   let added = false;
-  if (key) await Promise.all(missing().map(async (f) => { try { const d = await tmdb("/" + (f.type === "tv" ? "tv" : "movie") + "/" + f.id, new URLSearchParams({ language: "en-US" })); if (validPath(d.backdrop_path)) { bdPaths[cacheKey(f)] = d.backdrop_path; added = true; } } catch (e) { /* skip */ } }));
+  if (key || proxy) await Promise.all(missing().map(async (f) => { try { const d = await tmdb("/" + (f.type === "tv" ? "tv" : "movie") + "/" + f.id, new URLSearchParams({ language: "en-US" })); if (validPath(d.backdrop_path)) { bdPaths[cacheKey(f)] = d.backdrop_path; added = true; } } catch (e) { /* skip */ } }));
   store.set("rp_bd", JSON.stringify(bdPaths));
   if (added && social.writeBackdrops) social.writeBackdrops(Object.fromEntries(FILMS.filter((f) => validPath(bdPaths[cacheKey(f)])).map((f) => [cacheKey(f), bdPaths[cacheKey(f)]])));
 }
@@ -538,7 +628,7 @@ function paintThemes() {
     ok.forEach((f) => opt("film:" + cacheKey(f), f.title, (sw) => { sw.style.backgroundImage = "url(" + bdUrl(bdPaths[cacheKey(f)], "w300") + ")"; }));
   };
   group("Movies", FILMS.filter((f) => f.type !== "tv")); group("Series", FILMS.filter((f) => f.type === "tv"));
-  $("themeHint").hidden = !unresolved || !!key;
+  $("themeHint").hidden = !unresolved || !!key || proxy;
 }
 $("bgFile").onchange = async () => {
   const f = $("bgFile").files[0]; $("bgFile").value = ""; if (!f) return;
@@ -559,6 +649,7 @@ applyTheme(store.get("rp_theme", "dark"));
 
 // ------------------------------------------------------------------ start
 route();
+await checkProxy();
 initStatic();
 await loadMeta();
 // first paint: posters on the reel so the machine does not look empty
@@ -566,5 +657,6 @@ lastIdle = shuffle(DEMO.map((x) => ({ ...x, poster: null }))); reel.idle(lastIdl
 social = await initSocial({ $, el, seen, saveSeen, renderSeen, say, tastes: { get: () => tastes, set: (t) => setTastes(t, true) }, onNewProfile: openTastes, openTastes });
 dailyPick(false);
 if (social.onTab) social.onTab(tab);
+if (tab === "title") route();
 resolveBackdrops().then(() => applyTheme(store.get("rp_theme", "dark")));
 window.__rp = { state, spin, isDemo: () => demo, reel: () => reel };

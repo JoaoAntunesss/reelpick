@@ -41,13 +41,14 @@ service cloud.firestore {
         && (!('tastes' in d) || d.tastes == null || (d.tastes is map && d.tastes.keys().hasOnly(['genres', 'type']) && d.tastes.genres is list && d.tastes.genres.size() <= 8 && d.tastes.type in ['movie', 'tv', 'both']));
     }
     function validSeen(d) {
-      return d.keys().hasOnly(['type', 'id', 'title', 'year', 'poster', 'rating', 'review', 'updatedAt'])
+      return d.keys().hasOnly(['type', 'id', 'title', 'year', 'poster', 'rating', 'review', 'spoiler', 'updatedAt'])
         && d.keys().hasAll(['type', 'id', 'title', 'updatedAt'])
         && d.type in ['movie', 'tv'] && d.id is int
         && d.title is string && d.title.size() <= 200
         && (!('year' in d) || (d.year is string && d.year.size() <= 4))
         && (!('poster' in d) || d.poster == null || (d.poster is string && d.poster.size() <= 200 && d.poster.matches('^https://image\\.tmdb\\.org/.*')))
-        && (!('rating' in d) || d.rating == null || (d.rating is int && d.rating >= 1 && d.rating <= 5))
+        && (!('rating' in d) || d.rating == null || (d.rating is number && d.rating >= 0.5 && d.rating <= 5 && math.floor(d.rating * 2) == d.rating * 2))
+        && (!('spoiler' in d) || d.spoiler is bool)
         && (!('review' in d) || (d.review is string && d.review.size() <= 600))
         && d.updatedAt is number;
     }
@@ -120,6 +121,36 @@ service cloud.firestore {
         }
       }
 
+      // Want to watch.
+      match /watchlist/{key} {
+        allow read: if canView(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['type', 'id', 'title', 'year', 'poster', 'at'])
+          && request.resource.data.type in ['movie', 'tv'] && request.resource.data.id is int
+          && request.resource.data.title is string && request.resource.data.title.size() <= 200
+          && request.resource.data.year is string && request.resource.data.year.size() <= 4
+          && (request.resource.data.poster == null || (request.resource.data.poster is string && request.resource.data.poster.size() <= 200 && request.resource.data.poster.matches('^https://image\\.tmdb\\.org/.*')))
+          && request.resource.data.at is number;
+        allow delete: if isOwner(uid);
+      }
+
+      // Notifications: anyone signed in (and not blocked) can leave one; only the owner reads them or marks them read.
+      match /notifs/{nid} {
+        allow read, delete: if isOwner(uid);
+        allow update: if isOwner(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) && request.resource.data.read is bool;
+        allow create: if signedIn() && request.auth.uid != uid && !blocked(uid)
+          && request.resource.data.keys().hasOnly(['type', 'from', 'name', 'handle', 'title', 'key', 'col', 'text', 'at', 'read'])
+          && request.resource.data.type in ['like', 'comment', 'repost', 'request', 'accept']
+          && request.resource.data.from == request.auth.uid
+          && request.resource.data.name is string && request.resource.data.name.size() <= 40
+          && request.resource.data.handle is string && request.resource.data.handle.size() <= 20
+          && (!('title' in request.resource.data) || (request.resource.data.title is string && request.resource.data.title.size() <= 200))
+          && (!('key' in request.resource.data) || (request.resource.data.key is string && request.resource.data.key.size() <= 40))
+          && (!('col' in request.resource.data) || request.resource.data.col in ['seen', 'posts'])
+          && (!('text' in request.resource.data) || (request.resource.data.text is string && request.resource.data.text.size() <= 140))
+          && request.resource.data.at is number && request.resource.data.read == false;
+      }
+
       // People I blocked: only I can see and change this list.
       match /blocks/{other} {
         allow read, delete: if isOwner(uid);
@@ -166,6 +197,20 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['paths', 'updatedAt'])
         && request.resource.data.paths is map && request.resource.data.paths.size() <= 200
         && request.resource.data.updatedAt is number;
+    }
+
+    // Reports of posts and comments. Nobody can read them from the app; check them in the Firebase console.
+    match /reports/{rid} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['from', 'owner', 'col', 'key', 'comment', 'reason', 'text', 'at'])
+        && request.resource.data.from == request.auth.uid
+        && request.resource.data.owner is string && request.resource.data.owner.size() <= 128
+        && request.resource.data.col in ['seen', 'posts', 'comment']
+        && request.resource.data.key is string && request.resource.data.key.size() <= 60
+        && (!('comment' in request.resource.data) || (request.resource.data.comment is string && request.resource.data.comment.size() <= 60))
+        && request.resource.data.reason in ['spam', 'offensive', 'spoilers', 'other']
+        && (!('text' in request.resource.data) || (request.resource.data.text is string && request.resource.data.text.size() <= 300))
+        && request.resource.data.at is number;
     }
 
     match /handles/{handle} {
