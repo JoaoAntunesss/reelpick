@@ -193,3 +193,105 @@ aside,.potd,.result,.howto{backdrop-filter:blur(6px)}
 .freview{margin:0;color:#d9d0f0;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
 .freview.none{color:var(--muted);font-style:italic}
 @media (max-width:520px){.fitems{grid-template-columns:1fr}.feed{padding:14px}}
+
+/* =================== social layout =================== */
+[hidden]{display:none!important}
+.appbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;padding:10px max(16px,calc(50% - 600px));background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:900;font-size:22px;letter-spacing:.2em;background:linear-gradient(180deg,#fff3c4,#ffc83d 55%,#ff9f1c);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 12px #ffc83d55)}
+.brand .bulb{margin:0;width:8px;height:8px}
+.navtabs{display:flex;gap:4px;margin:0 auto;padding:4px;border:1px solid var(--line);border-radius:999px;background:#120b20}
+.navtabs a{display:flex;align-items:center;gap:7px;padding:7px 16px;border-radius:999px;color:var(--muted);text-decoration:none;font-weight:600;transition:background .15s,color .15s}
+.navtabs a i{font-style:normal;font-size:16px}
+.navtabs a:hover{color:var(--text)}
+.navtabs a[aria-current]{background:linear-gradient(135deg,#ff5e9c,#c2185b);color:#fff;box-shadow:0 0 18px #ff3d8155}
+.account{margin:0;flex-wrap:nowrap;justify-content:flex-end}
+.cta{background:linear-gradient(135deg,#ff5e9c,#e0185f);border:0;color:#fff;font-weight:700;border-radius:999px;padding:9px 18px;box-shadow:0 4px 18px #ff3d8144}
+.cta:hover{filter:brightness(1.1)}
+.iconbtn{position:relative;width:42px;height:42px;padding:0;border-radius:50%;font-size:18px}
+.iconbtn i{font-style:normal}
+.iconbtn .badge{position:absolute;top:-4px;right:-6px;margin:0}
+.mebtn{padding:0;border-radius:50%;border:2px solid var(--neon);width:44px;height:44px;overflow:hidden;background:none}
+.mebtn .avatar.sm{width:40px;height:40px}
+button.sm{padding:5px 12px;font-size:13px;border-radius:999px}
+.soft{color:var(--cyan);text-decoration:none;font-weight:600}.soft:hover{text-decoration:underline}
+.card{background:color-mix(in srgb,var(--panel) 90%,transparent);border:1px solid var(--line);border-radius:18px;padding:16px}
+
+/* feed page */
+.feedview{display:grid;grid-template-columns:minmax(0,640px) 320px;gap:24px;justify-content:center;max-width:1200px;margin:20px auto;padding:0 16px}
+.feedview .side{display:flex;flex-direction:column;gap:12px;position:sticky;top:84px;align-self:start}
+.feedview .potd{margin:0}.feedview .potdbody{flex-direction:column}.feedview .potdbody img{width:100%;height:auto;aspect-ratio:2/3;max-height:260px;object-fit:cover}
+.spincta{display:flex;flex-direction:column;gap:2px;text-decoration:none;color:var(--text);transition:border-color .15s,transform .15s}
+.spincta span{color:var(--muted);font-size:13px}.spincta:hover{border-color:var(--neon);transform:translateY(-1px)}
+.welcome{padding:26px;background:linear-gradient(150deg,#3a1466,#160d28 70%);border-color:#5a2c96}
+.welcome h2{font-size:24px;letter-spacing:0;text-transform:none;color:var(--text);margin-bottom:6px}
+.welcome p{color:#d9d0f0;margin:0 0 16px}
+.feed{max-width:none;margin:0;padding:0;background:none;border:0}
+.feedtop h2{font-size:13px}
+.stories{display:flex;gap:14px;overflow-x:auto;padding:4px 2px 14px;margin-bottom:6px;scrollbar-width:none}
+.stories::-webkit-scrollbar{display:none}
+.story{flex:none;width:76px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:0;border:0;background:none}
+.story .ring{width:68px;height:68px;border-radius:50%;padding:3px;background:#2c1f47;display:flex;align-items:center;justify-content:center}
+.story.new .ring{background:conic-gradient(from 200deg,var(--gold),var(--neon),#8a2be2,var(--gold))}
+.story .ring .avatar{width:100%;height:100%;border:3px solid var(--bg);font-size:22px}
+.story.add .ring{background:#1f1534;border:2px dashed #5a4d7a;font-size:28px;color:var(--cyan)}
+.story b{font-size:12px;font-weight:500;max-width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.story:hover .ring{transform:scale(1.05)}.story .ring{transition:transform .15s}
+.fitems{grid-template-columns:1fr;gap:14px}
+.fitem{padding:14px 16px;border-radius:18px;background:color-mix(in srgb,var(--panel) 92%,transparent);animation:rise .35s both}
+.fwho .avatar.sm{box-shadow:0 0 0 2px var(--line)}
+.fbody img{width:96px;height:144px;border-radius:10px;box-shadow:0 6px 18px #0008}
+.fbody h3{font-size:18px}
+.fstars{font-size:16px}
+.freview{font-size:15px;-webkit-line-clamp:6}
+.empty{text-align:center;padding:28px}.empty p{color:var(--muted);margin:0 0 14px}
+
+/* choose page */
+.keybar{margin:16px 0 0}
+#v-pick>.banner{max-width:1168px;margin:14px auto 0}
+.filters{padding:0}
+.filters>summary{list-style:none;cursor:pointer;padding:14px 16px;font-weight:700;display:flex;align-items:center;justify-content:space-between}
+.filters>summary::-webkit-details-marker{display:none}
+.filters>summary::after{content:"▾";color:var(--muted);transition:transform .2s}
+.filters[open]>summary::after{transform:rotate(180deg)}
+.filters>section{padding:0 16px}.filters>section:last-child{padding-bottom:16px}
+.howto{margin:20px auto 10px;max-width:1168px}
+
+/* leaderboard */
+#v-top{max-width:720px;margin:20px auto;padding:0 16px}
+.board .feedtop h2{font-size:18px}
+.seg.mini{width:auto}.seg.mini button{padding:6px 14px;font-size:13px}
+.lblist{list-style:none;margin:10px 0 0;padding:0}
+.lbrow{display:flex;align-items:center;gap:12px;padding:10px 6px;border-top:1px solid var(--line)}
+.lbrow.mine{background:#2b1030;border-radius:12px}
+.lbrow .rank{width:32px;text-align:center;font-weight:800;color:var(--muted);font-size:16px}
+.lbrow.podium .rank{font-size:24px}
+.lbwho{flex:1;min-width:0;display:flex;align-items:center;gap:10px;border:0;background:none;padding:0;text-align:left}
+.lbwho span{min-width:0}.lbwho b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lbwho small{color:var(--muted)}
+.lbn{display:flex;flex-direction:column;align-items:center;min-width:64px}
+.lbn b{font-size:22px;color:var(--gold);line-height:1}.lbn small{color:var(--muted);font-size:11px}
+.lbseen{color:var(--muted);font-size:12px;min-width:64px;text-align:right}
+.lbrow.p1 .avatar{box-shadow:0 0 0 2px var(--gold),0 0 16px #ffc83d88}
+.lblist>.card{margin-top:10px}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:30;max-width:min(520px,92vw);padding:10px 16px;border-radius:12px;background:#2a1640;border:1px solid #5a2c96;box-shadow:0 10px 30px #000a;animation:rise .25s}
+
+@media (max-width:1000px){.feedview{grid-template-columns:minmax(0,640px)}.feedview .side{position:static;order:-1}.feedview .potdbody{flex-direction:row}.feedview .potdbody img{width:78px;height:117px;max-height:none}.feedview .spincta{display:none}}
+@media (max-width:700px){
+  body{padding-bottom:76px}
+  .appbar{gap:10px}.brand{font-size:18px;letter-spacing:.14em}
+  .navtabs{position:fixed;left:0;right:0;bottom:0;margin:0;border-radius:0;border:0;border-top:1px solid var(--line);justify-content:space-around;padding:6px 6px calc(6px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(14px)}
+  .navtabs a{flex-direction:column;gap:0;padding:6px 18px;font-size:11px;border-radius:14px}
+  .navtabs a i{font-size:21px}
+  .account{margin-left:auto}.cta{padding:8px 14px;font-size:14px}
+  .toast{bottom:86px}
+  .fbody img{width:80px;height:120px}
+  .lbseen{display:none}
+}
+.board .feedtop h2{letter-spacing:.08em;white-space:nowrap}
+.banner a{color:#ffd98a;font-weight:700}
+@media (max-width:1000px){
+  .feedview{display:flex;flex-direction:column;gap:14px}
+  .feedview .fcol,.feedview .side,.feedview .feed{display:contents}
+  #welcome{order:0}#feedFriends{order:1;margin:0}#potd{order:2}.feedview .feedtop{order:3;margin:6px 0 0}#feedList{order:4}
+}
+@media (max-width:700px){.appbar{backdrop-filter:none;background:var(--bg)}}

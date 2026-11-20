@@ -10,25 +10,56 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="top">
-  <h1><span class="bulb"></span>REELPICK<span class="bulb"></span></h1>
-  <p>Can't decide what to watch? Set your filters and pull the lever.</p>
+<header class="appbar">
+  <a class="brand" href="#feed"><span class="bulb" aria-hidden="true"></span>REELPICK</a>
+  <nav class="navtabs" aria-label="Sections">
+    <a href="#feed" data-tab="feed"><i aria-hidden="true">🏠</i><span>Feed</span></a>
+    <a href="#pick" data-tab="pick"><i aria-hidden="true">🎰</i><span>Choose</span></a>
+    <a href="#top" data-tab="top"><i aria-hidden="true">🏆</i><span>Top</span></a>
+  </nav>
   <div id="account" class="account" hidden>
-    <button id="signIn">Sign in with Google</button>
-    <span id="who" hidden></span>
-    <button id="friendsBtn" hidden>People<span id="reqBadge" class="badge" hidden></span></button>
-    <button id="profileBtn" hidden>My profile</button>
-    <button id="signOut" class="ghost" hidden>Sign out</button>
-  </div>
-  <div class="keybar">
-    <button id="keyTop" class="keytop" type="button"></button>
-    <a href="#howto" class="toplink">How to get your free key</a>
+    <button id="signIn" class="cta">Sign in with Google</button>
+    <span id="who" class="sr" hidden></span>
+    <button id="friendsBtn" class="iconbtn" hidden aria-label="People"><i aria-hidden="true">👥</i><span id="reqBadge" class="badge" hidden></span></button>
+    <button id="profileBtn" class="mebtn" hidden aria-label="My profile"><span id="meAv"></span></button>
   </div>
 </header>
 
+<div id="v-feed" class="view feedview" data-view="feed">
+  <div class="fcol">
+    <section id="welcome" class="card welcome" hidden>
+      <h2>Your friends' movies, in one feed</h2>
+      <p>Sign in to see what your friends are watching, how they rated it and what they thought. Share yours too.</p>
+      <div class="row"><button id="signIn2" class="cta" type="button">Sign in with Google</button><a href="#pick" class="soft">Or spin for something to watch →</a></div>
+    </section>
+    <section id="feed" class="feed" aria-labelledby="feedH" hidden>
+      <div id="feedFriends" class="stories" aria-label="Your friends"></div>
+      <div class="feedtop">
+        <h2 id="feedH">Friends' feed</h2>
+        <button type="button" id="feedRefresh" class="ghost sm">Refresh</button>
+      </div>
+      <div id="feedList" class="fitems"></div>
+    </section>
+  </div>
+  <aside class="side">
+    <section id="potd" class="potd card" aria-label="Pick of the day">
+      <div class="lbl">PICK OF THE DAY</div>
+      <div id="potdBody" class="potdbody"></div>
+    </section>
+    <a href="#pick" class="card spincta"><b>🎰 Can't decide what to watch?</b><span>Set your filters and pull the lever.</span></a>
+    <a href="#top" class="card spincta"><b>🏆 Top critics</b><span>Who wrote the most reviews.</span></a>
+  </aside>
+</div>
+
+<div id="v-pick" class="view" data-view="pick" hidden>
+<div class="keybar">
+  <button id="keyTop" class="keytop" type="button"></button>
+  <a href="#howto" class="toplink">How to get your free key</a>
+</div>
+<div id="banner" class="banner" hidden></div>
 <main class="grid">
-  <aside class="filters" aria-label="Filters">
-    <div id="banner" class="banner" hidden></div>
+  <details class="filters" id="filtersBox">
+    <summary>Filters</summary>
 
     <section>
       <h2>What</h2>
@@ -59,13 +90,9 @@
         <input type="range" id="minRating" min="0" max="9" step="0.5" value="0">
       </label>
     </section>
-  </aside>
+  </details>
 
   <section class="machine" aria-label="Slot machine">
-    <section id="potd" class="potd" aria-label="Pick of the day">
-      <div class="lbl">PICK OF THE DAY</div>
-      <div id="potdBody" class="potdbody"></div>
-    </section>
     <div class="cabinet">
       <div class="lights" aria-hidden="true"></div>
       <div class="window">
@@ -98,16 +125,6 @@
   </section>
 </main>
 
-<section id="feed" class="feed" aria-labelledby="feedH" hidden>
-  <div class="feedtop">
-    <h2 id="feedH">Friends' feed</h2>
-    <button type="button" id="feedRefresh" class="ghost">Refresh</button>
-  </div>
-  <div id="feedFriends" class="ffriends" aria-label="Your friends"></div>
-  <div id="feedList" class="fitems"></div>
-</section>
-
-
 <section id="howto" class="howto" aria-labelledby="howtoH">
   <h2 id="howtoH">How to get your free TMDB key</h2>
   <p>ReelPick gets its movies, series and streaming info from TMDB, a free database. Each person uses their own free key, so nothing is paid and nothing is shared. It takes about two minutes, once.</p>
@@ -131,6 +148,20 @@
   <p class="hint">No key yet? The page works in demo mode with a small built-in sample, without platform filters.</p>
 </section>
 
+</div>
+
+<div id="v-top" class="view" data-view="top" hidden>
+  <section class="card board">
+    <div class="feedtop">
+      <h2>Top critics</h2>
+      <div class="seg mini" id="lbSeg" role="group" aria-label="Leaderboard"><button type="button" data-v="friends" class="on">Friends</button><button type="button" data-v="all">Everyone</button></div>
+    </div>
+    <p class="hint">Ranked by reviews written. “Everyone” only includes public profiles.</p>
+    <ol id="lbList" class="lblist"></ol>
+  </section>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <footer>
   <p>This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data provided by JustWatch via TMDB.</p>
   <p><button id="keyBtn" class="link">TMDB key…</button> · <button id="seenBtn" class="link">My seen list (0)</button> · <button id="langBtn" class="link" type="button">Português</button></p>
@@ -198,7 +229,7 @@
     <h4>Pinned recommendation</h4>
     <div id="pPinned" class="pinned"></div>
     <p class="hint"><b>What is stored:</b> display name, nickname, photo, about me, watched list, ratings and reviews, in Google Firebase. Your email is never shown to anyone. Strangers only see your nickname. You can delete everything below.</p>
-    <div class="row"><button value="save" id="pSave">Save</button><button type="button" id="pDelete" class="ghost">Delete my account and data</button><button value="close" class="ghost">Close</button></div>
+    <div class="row"><button value="save" id="pSave">Save</button><button type="button" id="signOut" class="ghost">Sign out</button><button type="button" id="pDelete" class="ghost">Delete my account and data</button><button value="close" class="ghost">Close</button></div>
   </form>
 </dialog>
 

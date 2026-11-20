@@ -1,4 +1,5 @@
 // Accounts, nicknames, friend requests, profiles and comparison. Does nothing unless firebase-config.js has a config.
+import { isPT } from "./i18n.js";
 import { sanitizeItem, mergeSeen, compareLists, normalizeHandle, sanitizePinned, validPhoto, sanitizeProfile, buildFeed, timeAgo } from "./seen.js";
 
 const stars = (n) => (n ? "★".repeat(n) + "☆".repeat(5 - n) : "not rated");
@@ -38,7 +39,8 @@ export async function initSocial(ctx) {
     $("signIn").hidden = !!me; $("who").hidden = !me; $("friendsBtn").hidden = !me; $("profileBtn").hidden = !me; $("signOut").hidden = !me;
     if (me && profile) $("who").textContent = profile.name + (profile.handle ? "  @" + profile.handle : "");
     $("ePinBox").hidden = !me;
-    $("feed").hidden = !me;
+    $("feed").hidden = !me; $("welcome").hidden = !!me;
+    if (me && profile) $("meAv").replaceChildren(avatar(profile.photo, profile.name, "sm"));
     $("reqBadge").hidden = !incoming.length; $("reqBadge").textContent = incoming.length;
     if (me) $("friendsBtn").title = incoming.length ? incoming.length + " pending friend request(s)" : "People";
   }
@@ -63,13 +65,13 @@ export async function initSocial(ctx) {
     if (user) {
       wasIn = true;
       try { await syncDown(user); } catch (e) { console.warn(e); say("Signed in, but the cloud could not be read (" + (e.code || e.message) + "). Check the Firestore rules."); }
-      paintAccount(); loadFeed(true);
+      paintAccount(); loadFeed(true); delete lbCache.friends; delete lbCache.all; if (curTab === "top") loadBoard(true);
       const nick = normalizeHandle(new URLSearchParams(location.search).get("p"));
-      if (nick && profile) { history.replaceState(null, "", location.pathname); const uid = await guard(cloud.findHandle(nick)); if (uid) openProfile(uid, { handle: nick }); else say("Nobody uses the nickname @" + nick + "."); }
+      if (nick && profile) { history.replaceState(null, "", location.pathname + location.hash); const uid = await guard(cloud.findHandle(nick)); if (uid) openProfile(uid, { handle: nick }); else say("Nobody uses the nickname @" + nick + "."); }
     } else {
       profile = null; friends = []; incoming = []; outgoing = []; $("feedFriends").replaceChildren(); $("feedList").replaceChildren(); feedAt = 0;
       if (wasIn && !keepLocal) { seen.clear(); saveSeen(); renderSeen(); }   // the list stays in the account
-      wasIn = false; keepLocal = false; paintAccount();
+      wasIn = false; keepLocal = false; paintAccount(); delete lbCache.friends; delete lbCache.all; if (curTab === "top") loadBoard(true);
       const nick = normalizeHandle(new URLSearchParams(location.search).get("p"));
       if (nick) say("Sign in with Google to see @" + nick + "'s profile.");
     }
@@ -84,7 +86,7 @@ export async function initSocial(ctx) {
     if (removable) { const b = el("button", "ghost", "Remove pin"); b.type = "button"; b.onclick = async () => { profile.pinned = null; await guard(cloud.saveProfile(profile)); paintPinned(box, null, true); }; d.appendChild(b); }
     box.appendChild(d);
   }
-  const paintMyAvatar = () => $("pAvatar").replaceChildren(avatar(profile.photo, profile.name, "lg"));
+  const paintMyAvatar = () => { $("pAvatar").replaceChildren(avatar(profile.photo, profile.name, "lg")); $("meAv").replaceChildren(avatar(profile.photo, profile.name, "sm")); };
   function openProfileDlg() {
     $("pTastes").textContent = hasTastes(profile.tastes) ? profile.tastes.genres.join(", ") : "not set"; $("pName").value = profile.name; $("pHandle").value = profile.handle || ""; $("pBio").value = profile.bio || ""; $("pVis").value = profile.visibility;
     $("pLink").value = link() || "Set a nickname to get a link"; paintPinned($("pPinned"), profile.pinned, true); paintMyAvatar();
@@ -205,7 +207,8 @@ export async function initSocial(ctx) {
 
   // ---------------------------------------------------------------- wiring
   $("signIn").onclick = () => cloud.signIn().catch((e) => { if (e.code !== "auth/popup-closed-by-user" && e.code !== "auth/cancelled-popup-request") say("Sign-in failed (" + (e.code || e.message) + ")."); });
-  $("signOut").onclick = () => cloud.signOut();
+  $("signOut").onclick = () => { $("profileDlg").close(); cloud.signOut(); };
+  $("signIn2").onclick = () => $("signIn").click();
   $("profileBtn").onclick = openProfileDlg;
   $("pHandleSave").onclick = saveHandle;
   $("pTastesBtn").onclick = () => { $("profileDlg").close(); ctx.openTastes(); };
@@ -228,23 +231,25 @@ export async function initSocial(ctx) {
 
   // ---------------------------------------------------------------- friends' feed
   let feedBusy = false, feedAt = 0;
-  const typeLabel = (t) => (t === "tv" ? "Series" : "Movie");
+  const emptyCard = (text, label, fn) => { const d = el("div", "card empty"); d.appendChild(el("p", null, text)); if (label) { const b = el("button", "cta", label); b.type = "button"; b.onclick = fn; d.appendChild(b); } return d; };
+  const typeLabel = (t) => (t === "tv" ? (isPT ? "Série" : "Series") : "Movie");
   function paintFeedFriends(people) {
     const box = $("feedFriends"); box.replaceChildren();
-    for (const p of people) {
+    const add = el("button", "story add"); add.type = "button"; add.title = "Find people";
+    add.appendChild(el("span", "ring", "+")); add.appendChild(el("b", null, "Add")); add.onclick = () => $("friendsBtn").click(); box.appendChild(add);
+    const fresh = (p) => p.items.length && Date.now() - p.items[0].updatedAt < 3 * 864e5;
+    for (const p of [...people].sort((a, b) => (b.items[0] ? b.items[0].updatedAt : 0) - (a.items[0] ? a.items[0].updatedAt : 0))) {
       const name = p.name || (p.handle ? "@" + p.handle : "Friend");
-      const c = el("button", "fcard"); c.type = "button"; c.title = "Open " + name + "'s profile";
-      c.appendChild(avatar(p.profile && p.profile.photo, name));
+      const c = el("button", "story" + (fresh(p) ? " new" : "")); c.type = "button"; c.title = "Open " + name + "'s profile";
+      const ring = el("span", "ring"); ring.appendChild(avatar(p.profile && p.profile.photo, name)); c.appendChild(ring);
       c.appendChild(el("b", null, name));
-      if (p.handle) c.appendChild(el("small", null, "@" + p.handle));
-      c.appendChild(el("p", null, p.hidden ? "Private profile" : (p.profile && p.profile.bio) || (p.items.length ? p.items.length + " recent title" + (p.items.length > 1 ? "s" : "") : "Nothing logged yet")));
       c.onclick = () => openProfile(p.uid, { handle: p.handle });
       box.appendChild(c);
     }
   }
   function paintFeedList(entries) {
     const box = $("feedList"); box.replaceChildren();
-    if (!entries.length) { box.appendChild(el("p", "hint", "Your friends have not logged anything yet. When they mark a title as seen, it shows up here.")); return; }
+    if (!entries.length) { box.appendChild(emptyCard("Your friends have not logged anything yet. When they mark a title as seen, it shows up here.")); return; }
     for (const e of entries) {
       const a = el("article", "fitem"), it = e.item;
       const who = el("button", "fwho"); who.type = "button"; who.onclick = () => openProfile(e.uid, { handle: e.handle });
@@ -267,7 +272,7 @@ export async function initSocial(ctx) {
   async function loadFeed(force) {
     if (!me || feedBusy || (!force && Date.now() - feedAt < 60e3)) return;
     const list = $("feedList"), strip = $("feedFriends");
-    if (!friends.length) { strip.replaceChildren(); list.replaceChildren(el("p", "hint", "Add friends in People to see what they are watching and what they thought of it.")); return; }
+    if (!friends.length) { paintFeedFriends([]); list.replaceChildren(emptyCard("Add friends in People to see what they are watching and what they thought of it.", "Find people", () => $("friendsBtn").click())); return; }
     feedBusy = true;
     if (!list.children.length) list.replaceChildren(el("p", "hint", "Loading your friends' feed…"));
     try {
@@ -278,10 +283,45 @@ export async function initSocial(ctx) {
     feedBusy = false;
   }
   $("feedRefresh").onclick = () => loadFeed(true);
+
+  // ---------------------------------------------------------------- leaderboard
+  let lbScope = "friends", lbBusy = false; const lbCache = {};
+  function paintBoard(rows) {
+    const box = $("lbList"); box.replaceChildren();
+    if (!rows.length) { box.appendChild(el("li", "hint", "Nobody here yet.")); return; }
+    rows.forEach((r, i) => {
+      const li = el("li", "lbrow" + (me && r.uid === me.uid ? " mine" : "") + (i < 3 ? " podium p" + (i + 1) : ""));
+      li.appendChild(el("span", "rank", i < 3 ? ["🥇", "🥈", "🥉"][i] : String(i + 1)));
+      const who = el("button", "lbwho"); who.type = "button"; who.onclick = () => (me && r.uid === me.uid ? openProfileDlg() : openProfile(r.uid, { handle: r.handle }));
+      const name = r.name || (r.handle ? "@" + r.handle : "Friend");
+      who.appendChild(avatar(r.photo, name, "sm"));
+      const t = el("span"); t.appendChild(el("b", null, me && r.uid === me.uid ? name + " (you)" : name)); if (r.handle) t.appendChild(el("small", null, "@" + r.handle)); who.appendChild(t);
+      li.appendChild(who);
+      const n = el("span", "lbn"); n.appendChild(el("b", null, String(r.reviews))); n.appendChild(el("small", null, r.reviews === 1 ? "review" : "reviews")); li.appendChild(n);
+      li.appendChild(el("span", "lbseen", r.seen + " seen"));
+      box.appendChild(li);
+    });
+  }
+  async function loadBoard(force) {
+    if (!me) { $("lbList").replaceChildren(emptyCard("Sign in to see who writes the most reviews.", "Sign in with Google", () => $("signIn").click())); return; }
+    if (lbCache[lbScope] && !force) return paintBoard(lbCache[lbScope]);
+    if (lbBusy) return; lbBusy = true; const scope = lbScope;
+    $("lbList").replaceChildren(el("li", "hint", "Counting reviews…"));
+    try {
+      const mine = { uid: me.uid, name: profile.name, handle: profile.handle };
+      const people = scope === "friends" ? [mine, ...friends] : [mine, ...(await cloud.publicPeople(50))];
+      lbCache[scope] = await cloud.board(people);
+      if (scope === lbScope) paintBoard(lbCache[scope]);
+    } catch (e) { console.warn(e); $("lbList").replaceChildren(el("li", "hint", "Could not load the leaderboard (" + (e.code || e.message) + ").")); }
+    lbBusy = false;
+  }
+  document.querySelectorAll("#lbSeg button").forEach((b) => { b.onclick = () => { lbScope = b.dataset.v; document.querySelectorAll("#lbSeg button").forEach((x) => x.classList.toggle("on", x === b)); loadBoard(false); }; });
+  let curTab = "feed";
+  const onTab = (t) => { curTab = t; if (t === "top") loadBoard(false); if (t === "feed") loadFeed(false); };
   cloud.onAuth(onAuth);
 
   return {
-    enabled: true, signedIn: () => !!me,
+    enabled: true, signedIn: () => !!me, onTab,
     upsert: (item) => { if (me) guard(cloud.saveItem(item)); },
     remove: (key) => { if (me) guard(cloud.removeItem(key)); },
     pushMany: (items) => { if (me && items.length) guard(cloud.pushMany(items)); },

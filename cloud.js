@@ -1,7 +1,7 @@
 // Firebase wrapper (Auth with Google + Firestore). Loaded only when firebase-config.js has a config.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser, reauthenticateWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, query, where, documentId, limit, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, query, where, documentId, limit, orderBy, getCountFromServer } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { sanitizeItem, keyOf, sanitizeProfile, pairId } from "./seen.js";
 
 export async function init(config) {
@@ -69,6 +69,24 @@ export async function init(config) {
         } catch (e) { return { uid: f.uid, profile: null, name: f.name || "", handle: f.handle || "", items: [], hidden: true }; }
       };
       return Promise.all(friendList.slice(0, 40).map(one));
+    },
+    /** Leaderboard rows: reviews and titles seen for each person we are allowed to read. */
+    async board(people) {
+      const one = async (x) => {
+        try {
+          const c = seenCol(x.uid);
+          const [p, r, n] = await Promise.all([getDoc(userDoc(x.uid)).catch(() => null), getCountFromServer(query(c, where("review", ">", ""))), getCountFromServer(c)]);
+          const prof = p ? fromDoc(p) : null;
+          return { uid: x.uid, name: (prof && prof.name) || x.name || "", handle: (prof && prof.handle) || x.handle || "", photo: prof && prof.photo, reviews: r.data().count, seen: n.data().count };
+        } catch (e) { return null; }
+      };
+      const seenIds = new Set(), list = people.filter((x) => x && x.uid && !seenIds.has(x.uid) && seenIds.add(x.uid)).slice(0, 60);
+      return (await Promise.all(list.map(one))).filter(Boolean).sort((a, b) => b.reviews - a.reviews || b.seen - a.seen);
+    },
+    /** Public profiles (anyone signed in may read them). */
+    async publicPeople(n = 50) {
+      const s = await getDocs(query(collection(db, "users"), where("visibility", "==", "public"), limit(n)));
+      return s.docs.map((d) => { const p = fromDoc(d) || {}; return { uid: d.id, name: p.name || "", handle: p.handle || "" }; });
     },
     async loadSocial() {
       const uid = me(), f = collection(db, "friendships"), r = collection(db, "requests");

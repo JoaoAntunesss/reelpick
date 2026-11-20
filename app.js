@@ -59,7 +59,11 @@ function renderSeen() {
 let current = null, spinning = false, lastWinner = null, audio = null;
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-const say = (t) => { $("msg").textContent = t || ""; };
+let tab = "feed", toastT = 0;
+const say = (t) => {
+  $("msg").textContent = t || "";
+  if (t && tab !== "pick") { const b = $("toast"); b.textContent = t; b.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { b.hidden = true; }, 4200); }
+};
 
 // ------------------------------------------------------------------ TMDB
 async function tmdb(path, params = new URLSearchParams()) {
@@ -385,11 +389,34 @@ async function dailyPick(force) {
   row.append(tr, sn, an, tb); d.appendChild(row); box.appendChild(d);
 }
 
+// ------------------------------------------------------------------ sections (feed / choose / top)
+const TABS = ["feed", "pick", "top"];
+let lastIdle = null;
+function showTab(t, focusId) {
+  tab = t;
+  document.querySelectorAll(".view").forEach((v) => { v.hidden = v.dataset.view !== t; });
+  document.querySelectorAll(".navtabs a").forEach((a) => { if (a.dataset.tab === t) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+  if (t === "pick" && reel.kind === "dom" && lastIdle && !spinning) reel.idle(lastIdle);
+  if (social.onTab) social.onTab(t);
+  const target = focusId && document.getElementById(focusId);
+  if (target) target.scrollIntoView({ block: "start" }); else window.scrollTo(0, 0);
+}
+function route() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  if (TABS.includes(h)) return showTab(h);
+  const target = h && document.getElementById(h), view = target && target.closest(".view");
+  showTab(view ? view.dataset.view : "feed", view ? h : null);
+}
+window.addEventListener("hashchange", route);
+$("filtersBox").open = window.matchMedia("(min-width: 901px)").matches;
+
 // ------------------------------------------------------------------ start
+route();
 initStatic();
 await loadMeta();
 // first paint: posters on the reel so the machine does not look empty
-reel.idle(shuffle(DEMO.map((x) => ({ ...x, poster: null }))));
+lastIdle = shuffle(DEMO.map((x) => ({ ...x, poster: null }))); reel.idle(lastIdle);
 social = await initSocial({ $, el, seen, saveSeen, renderSeen, say, tastes: { get: () => tastes, set: (t) => setTastes(t, true) }, onNewProfile: openTastes, openTastes });
 dailyPick(false);
+if (social.onTab) social.onTab(tab);
 window.__rp = { state, spin, isDemo: () => demo, reel: () => reel };
