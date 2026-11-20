@@ -1,10 +1,11 @@
-import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle, tasteGenreIds, hashStr, mulberry32, dayKey } from "./query.js?v=1795190198";
-import { DEMO, DEMO_GENRES } from "./demo.js?v=1795190198";
-import { supported, createReel3D } from "./reel3d.js?v=1795190198";
-import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES } from "./seen.js?v=1795190198";
-import { initSocial } from "./social.js?v=1795190198";
-import { startI18n, tmdbLang, isPT, setLang } from "./i18n.js?v=1795190198";
-import { FILMS, PLAIN, validPath, cacheKey } from "./themes.js?v=1795190198";
+import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle, tasteGenreIds, hashStr, mulberry32, dayKey } from "./query.js?v=1795190298";
+import { DEMO, DEMO_GENRES } from "./demo.js?v=1795190298";
+import { supported, createReel3D } from "./reel3d.js?v=1795190298";
+import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES } from "./seen.js?v=1795190298";
+import { initSocial } from "./social.js?v=1795190298";
+import { startI18n, tmdbLang, isPT, setLang } from "./i18n.js?v=1795190298";
+import { icon } from "./icons.js?v=1795190298";
+import { FILMS, PLAIN, validPath, cacheKey } from "./themes.js?v=1795190298";
 startI18n();
 { const lb = document.getElementById("langBtn"); if (lb) { lb.textContent = isPT ? "English" : "Português"; lb.lang = isPT ? "en" : "pt-PT"; lb.title = isPT ? "Switch to English" : "Mudar para português"; lb.onclick = () => setLang(isPT ? "en" : "pt"); } }
 
@@ -502,6 +503,7 @@ function applyTheme(t) {
   const bg = $("bg"); document.body.classList.remove("has-bg", "has-photo"); bg.style.backgroundImage = ""; document.body.style.background = "";
   const plain = PLAIN.find((x) => x.key === t);
   if (plain && t !== "dark") { document.body.classList.add("has-bg"); document.body.style.background = plain.css; document.body.style.backgroundAttachment = "fixed"; }
+  if (t === "custom") { const u = store.get("rp_bg_custom", ""); if (/^data:image\/jpeg;base64,/.test(u)) { document.body.classList.add("has-bg", "has-photo"); bg.style.backgroundImage = "url(" + u + ")"; } return; }
   const m = /^film:(\w+)$/.exec(t || "");
   if (m && validPath(bdPaths[m[1]])) { document.body.classList.add("has-bg", "has-photo"); bg.style.backgroundImage = "url(" + bdUrl(bdPaths[m[1]], "w1280") + ")"; }
 }
@@ -522,6 +524,11 @@ function paintThemes() {
     b.onclick = () => { store.set("rp_theme", k); applyTheme(k); paintThemes(); };
     grid.appendChild(b);
   };
+  grid.appendChild(el("h4", "tgh", "Your photo"));
+  const mine = store.get("rp_bg_custom", "");
+  if (/^data:image\/jpeg;base64,/.test(mine)) opt("custom", "My photo", (sw) => { sw.style.backgroundImage = "url(" + mine + ")"; });
+  const up = el("button", "themeopt upl"); up.type = "button"; const usw = el("span", "sw"); usw.appendChild(icon("camera", 26)); up.appendChild(usw); up.appendChild(el("span", "tt", mine ? "Change photo" : "Use a photo from your phone"));
+  up.onclick = () => $("bgFile").click(); grid.appendChild(up);
   grid.appendChild(el("h4", "tgh", "Colours"));
   PLAIN.forEach((p) => opt(p.key, p.title, (sw) => { sw.style.background = p.css; }));
   let unresolved = 0;
@@ -533,6 +540,19 @@ function paintThemes() {
   group("Movies", FILMS.filter((f) => f.type !== "tv")); group("Series", FILMS.filter((f) => f.type === "tv"));
   $("themeHint").hidden = !unresolved || !!key;
 }
+$("bgFile").onchange = async () => {
+  const f = $("bgFile").files[0]; $("bgFile").value = ""; if (!f) return;
+  try {
+    if (!/^image\//.test(f.type)) throw new Error("Choose an image file (up to 25 MB).");
+    const bmp = await createImageBitmap(f); let url = "";
+    for (const side of [1920, 1600, 1280]) {
+      const k = Math.min(1, side / Math.max(bmp.width, bmp.height)), c = document.createElement("canvas");
+      c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k); c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+      url = c.toDataURL("image/jpeg", 0.78); if (url.length < 1500000) break;
+    }
+    localStorage.setItem("rp_bg_custom", url); store.set("rp_theme", "custom"); applyTheme("custom"); paintThemes();
+  } catch (e) { say(e.name === "QuotaExceededError" ? "That photo is too big for this browser. Try another one." : e.message || "Something went wrong."); }
+};
 $("themeBtn").onclick = async () => { paintThemes(); $("themeDlg").showModal(); await resolveBackdrops(); paintThemes(); };
 window.openThemes = () => $("themeBtn").click();
 applyTheme(store.get("rp_theme", "dark"));
