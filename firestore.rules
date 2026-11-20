@@ -90,7 +90,8 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/requests/$((request.auth.uid == request.resource.data.a ? request.resource.data.b : request.resource.data.a) + '_' + request.auth.uid));
       allow delete: if signedIn() && (resource.data.a == request.auth.uid || resource.data.b == request.auth.uid);
     }
-      // Private chat between two friends. The chat id is the friendship id: smaller uid + '_' + larger uid.
+
+    // Private chat between two friends. The chat id is the friendship id: smaller uid + '_' + larger uid.
     function inChat(cid) { return signedIn() && request.auth.uid in cid.split('_'); }
     function friendsNow(cid) { return exists(/databases/$(database)/documents/friendships/$(cid)); }
     function validShare(p) {
