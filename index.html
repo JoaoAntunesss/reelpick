@@ -19,6 +19,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="bg" aria-hidden="true"></div>
 <header class="appbar">
   <a class="brand" href="#feed"><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>ReelPick</a>
   <nav class="navtabs" aria-label="Sections">
@@ -224,7 +225,7 @@
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <footer>
   <p>This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data provided by JustWatch via TMDB.</p>
-  <p><button id="keyBtn" class="link">TMDB key…</button> · <button id="seenBtn" class="link">My seen list (0)</button> · <button id="langBtn" class="link" type="button">Português</button><span id="installWrap" hidden> · <button id="installBtn" class="link" type="button">Install app</button></span></p>
+  <p><button id="keyBtn" class="link">TMDB key…</button> · <button id="seenBtn" class="link">My seen list (0)</button> · <button id="langBtn" class="link" type="button">Português</button>· <button id="themeBtn" class="link" type="button">Background</button> <span id="installWrap" hidden> · <button id="installBtn" class="link" type="button">Install app</button></span></p>
 </footer>
 
 <dialog id="seenDlg" class="wide">
@@ -328,6 +329,16 @@
     <div class="tabs" role="tablist"><button type="button" id="vTabR" class="tab sel" role="tab">Reviews</button><button type="button" id="vTabC" class="tab" role="tab">Compared with me</button></div>
     <div id="vBody" class="vbody"></div>
     <div class="row"><button type="button" id="vMsg" hidden>Message</button><button type="button" id="vBlock" class="ghost danger" hidden>Block</button><button type="button" id="vAdd" hidden>Add friend</button><button value="close" class="ghost">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="themeDlg" class="wide">
+  <form method="dialog">
+    <h3>Background</h3>
+    <p class="hint">Choose the background for ReelPick on this device. Film stills come from TMDB.</p>
+    <div id="themeGrid" class="themegrid"></div>
+    <p id="themeHint" class="hint" hidden>Add your free TMDB key once to load the film stills.</p>
+    <div class="row"><button value="close" class="ghost">Close</button></div>
   </form>
 </dialog>
 

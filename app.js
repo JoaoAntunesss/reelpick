@@ -4,6 +4,7 @@ import { supported, createReel3D } from "./reel3d.js";
 import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES } from "./seen.js";
 import { initSocial } from "./social.js";
 import { startI18n, tmdbLang, isPT, setLang } from "./i18n.js";
+import { FILMS, PLAIN, validPath } from "./themes.js";
 startI18n();
 { const lb = document.getElementById("langBtn"); if (lb) { lb.textContent = isPT ? "English" : "Português"; lb.lang = isPT ? "en" : "pt-PT"; lb.title = isPT ? "Switch to English" : "Mudar para português"; lb.onclick = () => setLang(isPT ? "en" : "pt"); } }
 
@@ -435,6 +436,42 @@ $("installBtn").onclick = async () => {
 };
 if (!standalone() && /iphone|ipad|ipod/i.test(navigator.userAgent)) $("installWrap").hidden = false;
 
+// ------------------------------------------------------------------ background themes
+let bdPaths = {}; try { bdPaths = JSON.parse(store.get("rp_bd", "{}")) || {}; } catch (e) { bdPaths = {}; }
+const bdUrl = (path, size) => IMG + size + path;
+function applyTheme(t) {
+  const bg = $("bg"); document.body.classList.remove("has-bg", "has-photo"); bg.style.backgroundImage = ""; document.body.style.background = "";
+  const plain = PLAIN.find((x) => x.key === t);
+  if (plain && t !== "dark") { document.body.classList.add("has-bg"); document.body.style.background = plain.css; document.body.style.backgroundAttachment = "fixed"; }
+  const m = /^film:(\d+)$/.exec(t || "");
+  if (m && validPath(bdPaths[m[1]])) { document.body.classList.add("has-bg", "has-photo"); bg.style.backgroundImage = "url(" + bdUrl(bdPaths[m[1]], "w1280") + ")"; }
+}
+async function resolveBackdrops() {
+  const missing = () => FILMS.filter((f) => !validPath(bdPaths[f.id]));
+  if (!missing().length) return;
+  if (social.readBackdrops) { const shared = await social.readBackdrops(); Object.entries(shared || {}).forEach(([k, v]) => { if (validPath(v)) bdPaths[k] = v; }); }
+  let added = false;
+  if (key) for (const f of missing()) { try { const d = await tmdb("/movie/" + f.id, new URLSearchParams({ language: "en-US" })); if (validPath(d.backdrop_path)) { bdPaths[f.id] = d.backdrop_path; added = true; } } catch (e) { /* skip */ } }
+  store.set("rp_bd", JSON.stringify(bdPaths));
+  if (added && social.writeBackdrops) social.writeBackdrops(Object.fromEntries(FILMS.filter((f) => validPath(bdPaths[f.id])).map((f) => [String(f.id), bdPaths[f.id]])));
+}
+function paintThemes() {
+  const cur = store.get("rp_theme", "dark"), grid = $("themeGrid"); grid.replaceChildren();
+  const opt = (k, title, styler) => {
+    const b = el("button", "themeopt" + (cur === k ? " on" : "")); b.type = "button"; b.setAttribute("aria-pressed", cur === k);
+    const sw = el("span", "sw"); styler(sw); b.appendChild(sw); const t = el("span", "tt", title); if (k.startsWith("film:")) t.translate = false; b.appendChild(t);
+    b.onclick = () => { store.set("rp_theme", k); applyTheme(k); paintThemes(); };
+    grid.appendChild(b);
+  };
+  PLAIN.forEach((p) => opt(p.key, p.title, (sw) => { sw.style.background = p.css; }));
+  let unresolved = 0;
+  FILMS.forEach((f) => { const path = bdPaths[f.id]; if (!validPath(path)) { unresolved++; return; } opt("film:" + f.id, f.title, (sw) => { sw.style.backgroundImage = "url(" + bdUrl(path, "w300") + ")"; }); });
+  $("themeHint").hidden = !unresolved || !!key;
+}
+$("themeBtn").onclick = async () => { paintThemes(); $("themeDlg").showModal(); await resolveBackdrops(); paintThemes(); };
+window.openThemes = () => $("themeBtn").click();
+applyTheme(store.get("rp_theme", "dark"));
+
 // ------------------------------------------------------------------ start
 route();
 initStatic();
@@ -444,4 +481,5 @@ lastIdle = shuffle(DEMO.map((x) => ({ ...x, poster: null }))); reel.idle(lastIdl
 social = await initSocial({ $, el, seen, saveSeen, renderSeen, say, tastes: { get: () => tastes, set: (t) => setTastes(t, true) }, onNewProfile: openTastes, openTastes });
 dailyPick(false);
 if (social.onTab) social.onTab(tab);
+resolveBackdrops().then(() => applyTheme(store.get("rp_theme", "dark")));
 window.__rp = { state, spin, isDemo: () => demo, reel: () => reel };

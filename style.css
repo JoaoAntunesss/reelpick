@@ -536,3 +536,17 @@ fieldset.pinfo legend{color:var(--muted);font-size:12px;padding:0 6px}
 .mtrow .lbn b{font-size:18px}
 .mtlist .hint{margin:4px 0}
 @media (max-width:1000px){#miniTop{order:4}}
+
+/* background themes */
+#bg{position:fixed;inset:0;z-index:-1;background-size:cover;background-position:center 30%;pointer-events:none}
+body.has-photo #bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,#0e111566 0,#0e1115a6 45%,#0e1115d9 100%)}
+body.has-bg{background-color:transparent}
+body.has-photo{background:transparent!important}
+body.has-bg .card,body.has-bg .fitem,body.has-bg .potd,body.has-bg .result,body.has-bg .howto,body.has-bg .filters,body.has-bg .scard,body.has-bg .chatlist,body.has-bg .convo,body.has-bg .board,body.has-bg .prof{background:#171b21d4;backdrop-filter:blur(12px)}
+body.has-bg .appbar{background:#0e1115cc}
+.themegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:12px 0;max-height:60vh;overflow:auto;padding:2px}
+.themeopt{display:flex;flex-direction:column;gap:6px;padding:6px;border-radius:10px;background:#13161b;text-align:left}
+.themeopt .sw{display:block;aspect-ratio:16/9;border-radius:6px;background-size:cover;background-position:center;box-shadow:inset 0 0 0 1px #ffffff14}
+.themeopt .tt{font-size:12px;color:#c9d1db;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.themeopt.on{border-color:var(--neon);box-shadow:0 0 0 2px var(--neon)}
+@media (max-width:700px){body.has-bg .appbar{background:#0e1115}}

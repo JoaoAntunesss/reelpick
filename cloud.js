@@ -31,6 +31,9 @@ export async function init(config) {
     },
     async saveProfile(p) { const uid = me(); const b = writeBatch(db); b.set(userDoc(uid), toDoc(p)); b.set(doc(db, "cards", uid), cardOf(p)); await b.commit(); },
     getDiscover: () => discover,
+    // Shared cache of TMDB backdrop paths for the background themes (so people without a TMDB key also get the images).
+    async readBackdrops() { try { const d = await getDoc(doc(db, "meta", "backdrops")); return d.exists() ? d.data().paths || {} : {}; } catch (e) { return {}; } },
+    async writeBackdrops(paths) { try { await setDoc(doc(db, "meta", "backdrops"), { paths, updatedAt: Date.now() }); } catch (e) { /* not signed in */ } },
     setDiscover(v) { discover = !!v; },
     /** Public mini cards (name, nickname, photo) of everyone, for suggestions and as a fallback for private profiles. */
     async allCards(n = 200) { return (await getDocs(query(collection(db, "cards"), limit(n)))).docs.map((d) => ({ uid: d.id, ...d.data() })); },

@@ -245,6 +245,7 @@ export async function initSocial(ctx) {
     const btn = (label, cls, fn) => { const b = el("button", cls || "", label); b.type = "button"; b.onclick = fn; act.appendChild(b); return b; };
     if (mine) {
       btn("Edit profile", "cta sm", openProfileDlg);
+      btn("Background", "ghost sm", () => window.openThemes && window.openThemes());
       btn("Share profile", "ghost sm", async () => { const l = link(); if (!l) { say("Set a nickname to get a link"); return; } try { await navigator.clipboard.writeText(l); say("Link copied."); } catch (e) { say(l); } });
     } else {
       const r = relation(uid);
@@ -487,7 +488,7 @@ export async function initSocial(ctx) {
       const li = el("li", "mtrow p" + (i + 1)); li.appendChild(el("span", "rank", String(i + 1)));
       const name = me && r.uid === me.uid ? "You" : r.name || "@" + r.handle;
       const w = el("button", "lbwho"); w.type = "button"; w.onclick = () => openProfile(r.uid, { handle: r.handle });
-      w.appendChild(avatar(r.photo, name, "sm")); const t = el("span"); t.appendChild(el("b", null, name)); w.appendChild(t); li.appendChild(w);
+      w.appendChild(avatar(r.photo, r.name || r.handle, "sm")); const t = el("span"); t.appendChild(el("b", null, name)); w.appendChild(t); li.appendChild(w);
       const n = el("span", "lbn"); n.appendChild(el("b", null, String(r.reviews))); n.appendChild(el("small", null, r.reviews === 1 ? "review" : "reviews")); li.appendChild(n);
       box.appendChild(li);
     });
@@ -698,6 +699,7 @@ export async function initSocial(ctx) {
 
   return {
     enabled: true, signedIn: () => !!me, onTab, shareWith,
+    readBackdrops: () => cloud.readBackdrops(), writeBackdrops: (m) => (me ? cloud.writeBackdrops(m) : null),
     upsert: (item) => { if (me) guard(cloud.saveItem(item)); },
     remove: (key) => { if (me) guard(cloud.removeItem(key)); },
     pushMany: (items) => { if (me && items.length) guard(cloud.pushMany(items)); },

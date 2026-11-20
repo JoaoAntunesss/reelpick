@@ -159,6 +159,15 @@ service cloud.firestore {
       allow delete: if isOwner(uid);
     }
 
+    // Shared cache of TMDB backdrop image paths used by the background themes.
+    match /meta/backdrops {
+      allow read: if true;
+      allow write: if signedIn()
+        && request.resource.data.keys().hasOnly(['paths', 'updatedAt'])
+        && request.resource.data.paths is map && request.resource.data.paths.size() <= 60
+        && request.resource.data.updatedAt is number;
+    }
+
     match /handles/{handle} {
       allow read: if signedIn();
       allow create: if signedIn() && handle.matches('^[a-z0-9_]{3,20}$')
