@@ -181,7 +181,7 @@ function initStatic() {
     } catch (e) { say("That file is not a valid ReelPick list."); }
     $("seenFile").value = "";
   };
-  const paintKey = () => { const b = $("keyTop"); b.classList.toggle("ok", !!key); b.textContent = key ? "🔑 TMDB key connected ✓" : "🔑 Add your free TMDB key"; b.title = key ? "Change or remove your key" : "Unlock every movie and series plus platform filters"; };
+  const paintKey = () => { const b = $("keyTop"); b.classList.toggle("ok", !!key); b.textContent = key ? "TMDB connected" : "Add your free TMDB key"; b.title = key ? "Change or remove your key" : "Unlock every movie and series plus platform filters"; };
   const openKey = () => { $("keyInput").value = key; $("dlg").showModal(); };
   $("keyBtn").onclick = openKey; $("keyTop").onclick = openKey; paintKey();
   $("dlg").addEventListener("close", () => {
@@ -416,6 +416,7 @@ function showTab(t, focusId) {
 function route() {
   const h = decodeURIComponent(location.hash.slice(1));
   if (TABS.includes(h)) return showTab(h);
+  if (h.startsWith("u/")) return showTab("profile");
   const target = h && document.getElementById(h), view = target && target.closest(".view");
   showTab(view ? view.dataset.view : "feed", view ? h : null);
 }

@@ -22,8 +22,16 @@ service cloud.firestore {
         && p.text is string && p.text.size() <= 280
         && (p.poster == null || (p.poster is string && p.poster.size() <= 200 && p.poster.matches('^https://image\\.tmdb\\.org/.*')));
     }
+    function shortText(v) { return v is string && v.size() <= 80; }
+    function validInfo(i) {
+      return i is map && i.keys().hasOnly(['movie', 'series', 'director', 'actor', 'watching', 'city'])
+        && (!('movie' in i) || shortText(i.movie)) && (!('series' in i) || shortText(i.series))
+        && (!('director' in i) || shortText(i.director)) && (!('actor' in i) || shortText(i.actor))
+        && (!('watching' in i) || shortText(i.watching)) && (!('city' in i) || shortText(i.city));
+    }
     function validProfile(d) {
-      return d.keys().hasOnly(['name', 'handle', 'photo', 'bio', 'visibility', 'pinned', 'tastes', 'updatedAt'])
+      return d.keys().hasOnly(['name', 'handle', 'photo', 'bio', 'visibility', 'pinned', 'tastes', 'info', 'updatedAt'])
+        && (!('info' in d) || d.info == null || validInfo(d.info))
         && d.name is string && d.name.size() <= 40
         && d.visibility in ['private', 'friends', 'public']
         && (!('handle' in d) || d.handle == null || (d.handle is string && d.handle.matches('^[a-z0-9_]{3,20}$')))

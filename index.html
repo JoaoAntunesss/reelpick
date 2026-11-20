@@ -22,15 +22,15 @@
 <header class="appbar">
   <a class="brand" href="#feed"><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>ReelPick</a>
   <nav class="navtabs" aria-label="Sections">
-    <a href="#feed" data-tab="feed"><i aria-hidden="true">🏠</i><span>Feed</span></a>
-    <a href="#pick" data-tab="pick"><i aria-hidden="true">🎰</i><span>Choose</span></a>
-    <a href="#chat" data-tab="chat"><i aria-hidden="true">💬</i><span>Messages</span><b id="chatBadge" class="badge" hidden></b></a>
-    <a href="#top" data-tab="top"><i aria-hidden="true">🏆</i><span>Top</span></a>
+    <a href="#feed" data-tab="feed"><i aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h5v-6h4v6h5V9.5"/></svg></i><span>Feed</span></a>
+    <a href="#pick" data-tab="pick"><i aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></svg></i><span>Choose</span></a>
+    <a href="#chat" data-tab="chat"><i aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></i><span>Messages</span><b id="chatBadge" class="badge" hidden></b></a>
+    <a href="#top" data-tab="top"><i aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg></i><span>Top</span></a>
   </nav>
   <div id="account" class="account" hidden>
     <button id="signIn" class="cta">Sign in with Google</button>
     <span id="who" class="sr" hidden></span>
-    <button id="friendsBtn" class="iconbtn" hidden aria-label="People"><i aria-hidden="true">👥</i><span id="reqBadge" class="badge" hidden></span></button>
+    <button id="friendsBtn" class="iconbtn" hidden aria-label="People"><svg class="ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></svg><span id="reqBadge" class="badge" hidden></span></button>
     <button id="profileBtn" class="mebtn" hidden aria-label="My profile"><span id="meAv"></span></button>
   </div>
 </header>
@@ -47,7 +47,7 @@
       <form id="composer" class="card composer2" autocomplete="off" hidden>
         <div class="crow1"><span id="compAv"></span><textarea id="compText" maxlength="1000" rows="2" placeholder="What are you watching? Share a photo or a thought…" aria-label="New post"></textarea></div>
         <div id="compPrev" class="compprev" hidden></div>
-        <div class="crow2"><button type="button" id="compPhoto" class="ghost sm">📷 Photo</button><input type="file" id="compFile" accept="image/*" hidden><span id="compCount" class="hint"></span><button type="submit" id="compPost" class="cta sm" disabled>Post</button></div>
+        <div class="crow2"><button type="button" id="compPhoto" class="ghost sm"><svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="4"/></svg><span>Photo</span></button><input type="file" id="compFile" accept="image/*" hidden><span id="compCount" class="hint"></span><button type="submit" id="compPost" class="cta sm" disabled>Post</button></div>
       </form>
       <section id="suggest" class="suggest" hidden>
         <h2>People you may know</h2>
@@ -65,8 +65,8 @@
       <div class="lbl">PICK OF THE DAY</div>
       <div id="potdBody" class="potdbody"></div>
     </section>
-    <a href="#pick" class="card spincta"><b>🎰 Can't decide what to watch?</b><span>Set your filters and pull the lever.</span></a>
-    <a href="#top" class="card spincta"><b>🏆 Top critics</b><span>Who wrote the most reviews.</span></a>
+    <a href="#pick" class="card spincta"><b>Can't decide what to watch?</b><span>Set your filters and pull the lever.</span></a>
+    <a href="#top" class="card spincta"><b>Top critics</b><span>Who wrote the most reviews.</span></a>
   </aside>
 </div>
 
@@ -138,7 +138,7 @@
           <a id="rTrailer" class="btn" target="_blank" rel="noopener noreferrer">Watch trailer</a>
           <button id="rRate" class="ghost">I've watched it — rate</button>
           <button id="seen" class="ghost">Seen it — spin again</button>
-          <button id="rSend" class="ghost" type="button" hidden>💬 Send to a friend</button>
+          <button id="rSend" class="ghost" type="button" hidden>Send to a friend</button>
         </div>
       </div>
     </article>
@@ -172,17 +172,40 @@
 
 <div id="v-chat" class="view chatview" data-view="chat" hidden>
   <section class="card chatlist">
-    <div class="feedtop"><h2>Messages</h2><button type="button" id="notifBtn" class="ghost sm" hidden>🔔 Turn on alerts</button></div>
+    <div class="feedtop"><h2>Messages</h2><button type="button" id="notifBtn" class="ghost sm" hidden>Turn on alerts</button></div>
     <div id="chatList" class="clist"></div>
   </section>
   <section class="card convo" id="convo" hidden>
-    <div class="chead"><button type="button" id="chatBack" class="ghost sm" aria-label="Back">←</button><div id="chatWho" class="cwho"></div></div>
+    <div class="chead"><button type="button" id="chatBack" class="ghost sm" aria-label="Back"><svg class="ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div id="chatWho" class="cwho"></div></div>
     <div id="msgs" class="msgs"></div>
     <div id="shareBox" class="sharebox" hidden></div>
     <form id="chatForm" class="composer" autocomplete="off"><input id="chatInput" maxlength="1000" placeholder="Write a message…" aria-label="Message"><button class="cta" id="chatSend" type="submit">Send</button></form>
   </section>
-  <section class="card convo-empty" id="convoEmpty"><p>💬</p><p class="hint">Choose a friend to talk about movies and series.</p></section>
+  <section class="card convo-empty" id="convoEmpty"><p class="bigic"><svg class="ic" viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></p><p class="hint">Choose a friend to talk about movies and series.</p></section>
 </div>
+
+<div id="v-profile" class="view profview" data-view="profile" hidden>
+  <section class="card prof">
+    <div class="prof-top">
+      <div id="prAv" class="prof-av"></div>
+      <div class="prof-main">
+        <div class="prof-name"><h1 id="prName"></h1><span id="prHandle" class="prof-handle" translate="no"></span></div>
+        <div id="prStats" class="prof-stats"></div>
+        <div id="prActions" class="prof-actions"></div>
+      </div>
+    </div>
+    <p id="prBio" class="prof-bio" translate="no"></p>
+    <dl id="prInfo" class="prof-info"></dl>
+    <div id="prTastes" class="prof-tastes"></div>
+    <div id="prPinned"></div>
+  </section>
+  <nav id="prTabs" class="ptabs" aria-label="Profile sections">
+    <button type="button" data-t="posts">Posts</button><button type="button" data-t="reviews">Reviews</button><button type="button" data-t="seen">Watched</button><button type="button" data-t="common">In common</button>
+  </nav>
+  <section id="prBody" class="prbody"></section>
+</div>
+
+<dialog id="postDlg" class="wide"><form method="dialog"><div id="postDlgBody"></div><div class="row"><button value="close" class="ghost">Close</button></div></form></dialog>
 
 <div id="v-top" class="view" data-view="top" hidden>
   <section class="card board">
@@ -198,7 +221,7 @@
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <footer>
   <p>This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data provided by JustWatch via TMDB.</p>
-  <p><button id="keyBtn" class="link">TMDB key…</button> · <button id="seenBtn" class="link">My seen list (0)</button> · <button id="langBtn" class="link" type="button">Português</button><span id="installWrap" hidden> · <button id="installBtn" class="link" type="button">📲 Install app</button></span></p>
+  <p><button id="keyBtn" class="link">TMDB key…</button> · <button id="seenBtn" class="link">My seen list (0)</button> · <button id="langBtn" class="link" type="button">Português</button><span id="installWrap" hidden> · <button id="installBtn" class="link" type="button">Install app</button></span></p>
 </footer>
 
 <dialog id="seenDlg" class="wide">
@@ -255,6 +278,14 @@
     </label>
     <p class="hint">3 to 20 letters, numbers or _ . Nicknames are unique.</p>
     <div class="tastesline"><b>My tastes:</b> <span id="pTastes"></span> <button type="button" id="pTastesBtn" class="ghost">Change</button></div>
+    <fieldset class="pinfo"><legend>About you (shown on your profile)</legend>
+      <label>Favourite movie <input id="pi_movie" maxlength="80" autocomplete="off"></label>
+      <label>Favourite series <input id="pi_series" maxlength="80" autocomplete="off"></label>
+      <label>Favourite director <input id="pi_director" maxlength="80" autocomplete="off"></label>
+      <label>Favourite actor or actress <input id="pi_actor" maxlength="80" autocomplete="off"></label>
+      <label>Watching now <input id="pi_watching" maxlength="80" autocomplete="off"></label>
+      <label>City <input id="pi_city" maxlength="80" autocomplete="off"></label>
+    </fieldset>
     <label>About me <textarea id="pBio" maxlength="300" rows="3" placeholder="Tell people about your taste in movies and series (up to 300 characters)"></textarea></label>
     <label>Who can see my profile, list, ratings and reviews
       <select id="pVis"><option value="private">Only me</option><option value="friends">My friends (people I accepted)</option><option value="public">Any signed-in person who knows my nickname</option></select>
@@ -292,7 +323,7 @@
     <div id="vPinned"></div>
     <div class="tabs" role="tablist"><button type="button" id="vTabR" class="tab sel" role="tab">Reviews</button><button type="button" id="vTabC" class="tab" role="tab">Compared with me</button></div>
     <div id="vBody" class="vbody"></div>
-    <div class="row"><button type="button" id="vMsg" hidden>💬 Message</button><button type="button" id="vBlock" class="ghost danger" hidden>🚫 Block</button><button type="button" id="vAdd" hidden>Add friend</button><button value="close" class="ghost">Close</button></div>
+    <div class="row"><button type="button" id="vMsg" hidden>Message</button><button type="button" id="vBlock" class="ghost danger" hidden>Block</button><button type="button" id="vAdd" hidden>Add friend</button><button value="close" class="ghost">Close</button></div>
   </form>
 </dialog>
 

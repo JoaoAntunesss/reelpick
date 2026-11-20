@@ -22,7 +22,9 @@ export async function init(config) {
     async loadMine() {
       const uid = me();
       const [p, s] = await Promise.all([getDoc(userDoc(uid)), getDocs(seenCol(uid))]);
-      return { profile: fromDoc(p), items: s.docs.map((d) => d.data()) };
+      let posts = [];
+      try { posts = (await getDocs(query(collection(db, "users", uid, "posts"), orderBy("at", "desc"), limit(60)))).docs.map((d) => { const x = d.data(); return { id: d.id, text: String(x.text || ""), photo: typeof x.photo === "string" ? x.photo : null, at: x.at || 0 }; }); } catch (e) { /* none */ }
+      return { profile: fromDoc(p), items: s.docs.map((d) => d.data()), posts };
     },
     async saveProfile(p) { await setDoc(userDoc(me()), toDoc(p)); },
     /** Claims a nickname (and frees the old one) in one atomic batch. */
@@ -67,7 +69,9 @@ export async function init(config) {
       if (!p.exists()) throw Object.assign(new Error("private"), { code: "private" });
       let s;
       try { s = await getDocs(seenCol(uid)); } catch (e) { throw Object.assign(new Error("private"), { code: "private" }); }
-      return { profile: fromDoc(p), items: s.docs.map((d) => d.data()) };
+      let posts = [];
+      try { posts = (await getDocs(query(collection(db, "users", uid, "posts"), orderBy("at", "desc"), limit(60)))).docs.map((d) => { const x = d.data(); return { id: d.id, text: String(x.text || ""), photo: typeof x.photo === "string" ? x.photo : null, at: x.at || 0 }; }); } catch (e) { /* none */ }
+      return { profile: fromDoc(p), items: s.docs.map((d) => d.data()), posts };
     },
     /** Friends' feed: each friend's latest watched titles (newest first) plus their profile card. Friends whose list I may not read are skipped. */
     async friendFeed(friendList, per = 8) {
@@ -173,7 +177,7 @@ export async function init(config) {
       const uid = me(), cid = pairId(uid, other), at = Date.now(), members = [uid, other].sort();
       const msg = { from: uid, text: String(text || "").slice(0, 1000), at };
       if (share) msg.share = { type: share.type, id: share.id, title: String(share.title).slice(0, 200), year: String(share.year || "").slice(0, 4), poster: share.poster || null };
-      const preview = msg.text || (share ? "🎬 " + msg.share.title : "");
+      const preview = msg.text || (share ? "“" + msg.share.title + "”" : "");
       await setDoc(doc(db, "chats", cid), { members, last: { text: preview.slice(0, 200), from: uid, at }, updatedAt: at, read: { [uid]: at } }, { merge: true });
       await addDoc(collection(db, "chats", cid, "msgs"), msg);
     },

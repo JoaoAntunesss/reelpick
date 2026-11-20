@@ -69,9 +69,16 @@ export function sanitizeTastes(t) {
 }
 
 /** Full profile as stored in users/{uid}. Anything invalid is dropped. */
+export const INFO_KEYS = ["movie", "series", "director", "actor", "watching", "city"];
+export function sanitizeInfo(x) {
+  if (!x || typeof x !== "object") return null;
+  const o = {}; INFO_KEYS.forEach((k) => { const v = str(x[k], 80); if (v) o[k] = v; });
+  return Object.keys(o).length ? o : null;
+}
 export function sanitizeProfile(p) {
   p = p || {};
   return {
+    info: sanitizeInfo(p.info),
     name: str(p.name, 40), handle: normalizeHandle(p.handle), photo: validPhoto(p.photo) ? p.photo : null, bio: str(p.bio, 300),
     visibility: VISIBILITY.includes(p.visibility) ? p.visibility : "friends", pinned: p.pinned ? sanitizePinned(p.pinned) : null, tastes: sanitizeTastes(p.tastes),
   };
