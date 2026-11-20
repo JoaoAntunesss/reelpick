@@ -28,6 +28,7 @@
     <a href="#chat" data-tab="chat"><i aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></i><span>Messages</span><b id="chatBadge" class="badge" hidden></b></a>
     <a href="#top" data-tab="top"><i aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg></i><span>Top</span></a>
   </nav>
+  <button id="logBtn" class="cta sm logbtn" type="button"><svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Log</span></button>
   <div id="account" class="account" hidden>
     <button id="signIn" class="cta">Sign in with Google</button>
     <span id="who" class="sr" hidden></span>
@@ -329,6 +330,24 @@
     <div class="tabs" role="tablist"><button type="button" id="vTabR" class="tab sel" role="tab">Reviews</button><button type="button" id="vTabC" class="tab" role="tab">Compared with me</button></div>
     <div id="vBody" class="vbody"></div>
     <div class="row"><button type="button" id="vMsg" hidden>Message</button><button type="button" id="vBlock" class="ghost danger" hidden>Block</button><button type="button" id="vAdd" hidden>Add friend</button><button value="close" class="ghost">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="logDlg" class="wide">
+  <form method="dialog">
+    <h3 id="logH">Log a movie or series</h3>
+    <div id="logFind">
+      <div class="lsearch"><svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="logQ" type="search" autocomplete="off" placeholder="Search a movie or series…" aria-label="Search a movie or series…"></div>
+      <div id="logResults" class="lresults"></div>
+    </div>
+    <div id="logEdit" hidden>
+      <div class="lhead"><img id="logPoster" alt=""><div><h4 id="logTitle" translate="no"></h4><p id="logMeta" class="hint"></p></div></div>
+      <p class="lbl2">Your rating</p>
+      <div class="stars" id="logStars"></div>
+      <label>Your review <textarea id="logReview" maxlength="600" rows="4" placeholder="What did you think? (optional)"></textarea></label>
+      <div class="row"><button type="button" id="logSave" class="cta">Save</button><button type="button" id="logBack" class="ghost">Back</button><button type="button" id="logRemove" class="ghost danger" hidden>Remove from watched</button></div>
+    </div>
+    <div class="row lclose"><button value="close" class="ghost">Close</button></div>
   </form>
 </dialog>
 

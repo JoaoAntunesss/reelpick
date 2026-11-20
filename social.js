@@ -223,7 +223,8 @@ export async function initSocial(ctx) {
     let data = null;
     try { data = await cloud.loadProfile(uid); } catch (e) { if (e.code !== "private") { say("Could not open the profile."); } }
     if (prUid !== uid) return;
-    const hint = hints.get(uid) || {}, p = data ? data.profile : null, items = data ? data.items.map(sanitizeItem).filter(Boolean) : [], posts = data ? data.posts || [] : [];
+    const hint = hints.get(uid) || {}, p = data ? data.profile : null, posts = data ? data.posts || [] : [];
+    const items = mine ? [...seen.values()] : data ? data.items.map(sanitizeItem).filter(Boolean) : [];
     const handle = (p && p.handle) || hint.handle || "", name = (p && p.name) || (handle ? "@" + handle : "This person");
     $("prAv").replaceChildren(avatar(p && p.photo, name, "xl"));
     $("prName").textContent = name; $("prHandle").textContent = handle ? "@" + handle : "";
@@ -286,13 +287,14 @@ export async function initSocial(ctx) {
         body.appendChild(g);
       } else if (prTab === "reviews") {
         const list = items.filter((i) => i.rating || i.review).sort((a, b) => b.updatedAt - a.updatedAt);
-        if (!list.length) { body.appendChild(emptyCard("No ratings or reviews yet.")); return; }
+        if (!list.length) { body.appendChild(mine ? emptyCard("No ratings or reviews yet.", "Log a movie or series", () => window.openLog && window.openLog()) : emptyCard("No ratings or reviews yet.")); return; }
         list.forEach((it) => body.appendChild(postCard(entry({ item: it, at: it.updatedAt }))));
       } else if (prTab === "seen") {
-        if (!items.length) { body.appendChild(emptyCard("Nothing logged yet")); return; }
+        if (!items.length && !mine) { body.appendChild(emptyCard("Nothing logged yet")); return; }
         const g = el("div", "sgrid");
+        if (mine) { const add = el("button", "sposter addtile"); add.type = "button"; add.appendChild(icon("plus", 28)); add.appendChild(el("span", null, "Log a movie or series")); add.onclick = () => window.openLog && window.openLog(); g.appendChild(add); }
         [...items].sort((a, b) => b.updatedAt - a.updatedAt).forEach((it) => {
-          const c = el("div", "sposter"); c.title = it.title + (it.year ? " (" + it.year + ")" : "");
+          const c = el(mine ? "button" : "div", "sposter"); c.title = it.title + (it.year ? " (" + it.year + ")" : ""); if (mine) { c.type = "button"; c.onclick = () => window.openLog && window.openLog(it); }
           if (it.poster) { const i = el("img"); i.src = it.poster; i.alt = it.title; i.loading = "lazy"; c.appendChild(i); } else c.appendChild(el("span", null, it.title));
           if (it.rating) c.appendChild(el("b", "srate", "★".repeat(it.rating)));
           g.appendChild(c);
@@ -364,6 +366,7 @@ export async function initSocial(ctx) {
     who.appendChild(avatar(ph, e.name, "sm"));
     const w = el("span"); w.appendChild(el("b", null, mine ? "You" : e.name)); w.appendChild(document.createTextNode(mine ? (it.review ? " wrote a review" : " watched it") : it.review ? " reviewed" : " watched")); who.appendChild(w);
     who.appendChild(el("small", null, timeAgo(it.updatedAt)));
+    if (mine && !e.by) { const hd = el("div", "phead2"); hd.appendChild(who); const ed = el("button", "ghost sm pdel"); ed.type = "button"; ed.append(icon("edit", 15), el("span", null, "Edit")); ed.onclick = () => window.openLog && window.openLog(it); hd.appendChild(ed); a.appendChild(hd); } else
     a.appendChild(who);
     const body = el("div", "fbody");
     if (it.poster) { const i = el("img"); i.src = it.poster; i.alt = ""; i.loading = "lazy"; body.appendChild(i); }
@@ -699,6 +702,7 @@ export async function initSocial(ctx) {
 
   return {
     enabled: true, signedIn: () => !!me, onTab, shareWith,
+    seenChanged: () => { feedAt = 0; if (curTab === "profile" && me && prUid === me.uid) renderProfilePage(me.uid); else if (curTab === "feed") setTimeout(() => loadFeed(true), 800); },
     readBackdrops: () => cloud.readBackdrops(), writeBackdrops: (m) => (me ? cloud.writeBackdrops(m) : null),
     upsert: (item) => { if (me) guard(cloud.saveItem(item)); },
     remove: (key) => { if (me) guard(cloud.removeItem(key)); },

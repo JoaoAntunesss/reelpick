@@ -4,7 +4,7 @@ import { supported, createReel3D } from "./reel3d.js";
 import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES } from "./seen.js";
 import { initSocial } from "./social.js";
 import { startI18n, tmdbLang, isPT, setLang } from "./i18n.js";
-import { FILMS, PLAIN, validPath } from "./themes.js";
+import { FILMS, PLAIN, validPath, cacheKey } from "./themes.js";
 startI18n();
 { const lb = document.getElementById("langBtn"); if (lb) { lb.textContent = isPT ? "English" : "Português"; lb.lang = isPT ? "en" : "pt-PT"; lb.title = isPT ? "Switch to English" : "Mudar para português"; lb.onclick = () => setLang(isPT ? "en" : "pt"); } }
 
@@ -436,6 +436,65 @@ $("installBtn").onclick = async () => {
 };
 if (!standalone() && /iphone|ipad|ipod/i.test(navigator.userAgent)) $("installWrap").hidden = false;
 
+// ------------------------------------------------------------------ log / edit what I watched (search TMDB)
+let logItem = null, logTimer = 0, logSeq = 0;
+function logStars(n) { $("logEdit").dataset.rating = n; [...$("logStars").children].forEach((b, i) => b.classList.toggle("on", i < n)); }
+for (let i = 1; i <= 5; i++) { const b = el("button", null, "★"); b.type = "button"; b.setAttribute("aria-label", i + " star" + (i > 1 ? "s" : "")); b.onclick = () => logStars(Number($("logEdit").dataset.rating) === i ? 0 : i); $("logStars").appendChild(b); }
+function logShowEdit(it) {
+  logItem = it; const k = it.type + ":" + it.id, cur = seen.get(k);
+  $("logFind").hidden = true; $("logEdit").hidden = false; $("logH").textContent = cur ? "Edit" : "Log a movie or series";
+  $("logPoster").src = it.poster || ""; $("logPoster").hidden = !it.poster;
+  $("logTitle").textContent = it.title; $("logMeta").textContent = [it.year, it.type === "tv" ? "Series" : "Movie"].filter(Boolean).join(" · ");
+  $("logReview").value = (cur && cur.review) || ""; logStars((cur && cur.rating) || 0);
+  $("logRemove").hidden = !cur; $("logRemove").dataset.armed = ""; $("logRemove").textContent = "Remove from watched";
+}
+function logShowFind() { logItem = null; $("logFind").hidden = false; $("logEdit").hidden = true; $("logH").textContent = "Log a movie or series"; setTimeout(() => $("logQ").focus(), 50); }
+async function logSearch() {
+  const q = $("logQ").value.trim(), box = $("logResults"), seq = ++logSeq;
+  if (q.length < 2) { box.replaceChildren(el("p", "hint", demo ? "Demo mode: only the built-in sample can be searched. Add a free TMDB key to search every movie and series." : "Type at least 2 letters.")); return; }
+  let list = [];
+  if (demo) list = DEMO.filter((x) => x.title.toLowerCase().includes(q.toLowerCase())).map((x) => ({ ...x, poster: null }));
+  else {
+    box.replaceChildren(el("p", "hint", "Searching…"));
+    try {
+      const r = await tmdb("/search/multi", new URLSearchParams({ query: q, language: tmdbLang, include_adult: "false" }));
+      list = r.results.filter((x) => x.media_type === "movie" || x.media_type === "tv").map((x) => norm(x, x.media_type)).slice(0, 15);
+    } catch (e) { if (seq === logSeq) box.replaceChildren(el("p", "hint", e.message)); return; }
+  }
+  if (seq !== logSeq) return;
+  box.replaceChildren();
+  if (!list.length) { box.appendChild(el("p", "hint", "Nothing found.")); return; }
+  list.forEach((it) => {
+    const b = el("button", "lres"); b.type = "button";
+    if (it.poster) { const i = el("img"); i.src = it.poster.replace("/w342/", "/w92/"); i.alt = ""; i.loading = "lazy"; b.appendChild(i); } else b.appendChild(el("span", "noposter"));
+    const t = el("span", "lt"); const tt = el("b", null, it.title); tt.translate = false; t.appendChild(tt); t.appendChild(el("small", null, [it.year, it.type === "tv" ? "Series" : "Movie"].filter(Boolean).join(" · "))); b.appendChild(t);
+    if (seen.has(it.type + ":" + it.id)) b.appendChild(el("span", "lseen", "Already watched"));
+    b.onclick = () => logShowEdit(it);
+    box.appendChild(b);
+  });
+}
+$("logQ").addEventListener("input", () => { clearTimeout(logTimer); logTimer = setTimeout(logSearch, 350); });
+$("logBack").onclick = logShowFind;
+$("logSave").onclick = () => {
+  if (!logItem) return;
+  const k = markSeen(logItem), cur = seen.get(k), r = Number($("logEdit").dataset.rating) || null;
+  const item = sanitizeItem({ ...cur, rating: r, review: $("logReview").value.trim(), updatedAt: Date.now() });
+  seen.set(k, item); saveSeen(); social.upsert(item); renderSeen();
+  $("logDlg").close(); say("Saved."); if (social.seenChanged) social.seenChanged();
+};
+$("logRemove").onclick = () => {
+  const b = $("logRemove"); if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Click again to confirm"; return; }
+  const k = logItem.type + ":" + logItem.id; seen.delete(k); saveSeen(); social.remove(k); renderSeen();
+  $("logDlg").close(); say("Removed."); if (social.seenChanged) social.seenChanged();
+};
+function openLog(it) {
+  $("logQ").value = ""; $("logResults").replaceChildren();
+  if (it) logShowEdit(it); else { logShowFind(); logSearch(); }
+  $("logDlg").showModal(); if (!it) $("logQ").focus();
+}
+window.openLog = openLog;
+$("logBtn").onclick = () => openLog();
+
 // ------------------------------------------------------------------ background themes
 let bdPaths = {}; try { bdPaths = JSON.parse(store.get("rp_bd", "{}")) || {}; } catch (e) { bdPaths = {}; }
 const bdUrl = (path, size) => IMG + size + path;
@@ -443,17 +502,17 @@ function applyTheme(t) {
   const bg = $("bg"); document.body.classList.remove("has-bg", "has-photo"); bg.style.backgroundImage = ""; document.body.style.background = "";
   const plain = PLAIN.find((x) => x.key === t);
   if (plain && t !== "dark") { document.body.classList.add("has-bg"); document.body.style.background = plain.css; document.body.style.backgroundAttachment = "fixed"; }
-  const m = /^film:(\d+)$/.exec(t || "");
+  const m = /^film:(\w+)$/.exec(t || "");
   if (m && validPath(bdPaths[m[1]])) { document.body.classList.add("has-bg", "has-photo"); bg.style.backgroundImage = "url(" + bdUrl(bdPaths[m[1]], "w1280") + ")"; }
 }
 async function resolveBackdrops() {
-  const missing = () => FILMS.filter((f) => !validPath(bdPaths[f.id]));
+  const missing = () => FILMS.filter((f) => !validPath(bdPaths[cacheKey(f)]));
   if (!missing().length) return;
   if (social.readBackdrops) { const shared = await social.readBackdrops(); Object.entries(shared || {}).forEach(([k, v]) => { if (validPath(v)) bdPaths[k] = v; }); }
   let added = false;
-  if (key) for (const f of missing()) { try { const d = await tmdb("/movie/" + f.id, new URLSearchParams({ language: "en-US" })); if (validPath(d.backdrop_path)) { bdPaths[f.id] = d.backdrop_path; added = true; } } catch (e) { /* skip */ } }
+  if (key) await Promise.all(missing().map(async (f) => { try { const d = await tmdb("/" + (f.type === "tv" ? "tv" : "movie") + "/" + f.id, new URLSearchParams({ language: "en-US" })); if (validPath(d.backdrop_path)) { bdPaths[cacheKey(f)] = d.backdrop_path; added = true; } } catch (e) { /* skip */ } }));
   store.set("rp_bd", JSON.stringify(bdPaths));
-  if (added && social.writeBackdrops) social.writeBackdrops(Object.fromEntries(FILMS.filter((f) => validPath(bdPaths[f.id])).map((f) => [String(f.id), bdPaths[f.id]])));
+  if (added && social.writeBackdrops) social.writeBackdrops(Object.fromEntries(FILMS.filter((f) => validPath(bdPaths[cacheKey(f)])).map((f) => [cacheKey(f), bdPaths[cacheKey(f)]])));
 }
 function paintThemes() {
   const cur = store.get("rp_theme", "dark"), grid = $("themeGrid"); grid.replaceChildren();
@@ -463,9 +522,15 @@ function paintThemes() {
     b.onclick = () => { store.set("rp_theme", k); applyTheme(k); paintThemes(); };
     grid.appendChild(b);
   };
+  grid.appendChild(el("h4", "tgh", "Colours"));
   PLAIN.forEach((p) => opt(p.key, p.title, (sw) => { sw.style.background = p.css; }));
   let unresolved = 0;
-  FILMS.forEach((f) => { const path = bdPaths[f.id]; if (!validPath(path)) { unresolved++; return; } opt("film:" + f.id, f.title, (sw) => { sw.style.backgroundImage = "url(" + bdUrl(path, "w300") + ")"; }); });
+  const group = (label, list) => {
+    const ok = list.filter((f) => validPath(bdPaths[cacheKey(f)])); unresolved += list.length - ok.length; if (!ok.length) return;
+    grid.appendChild(el("h4", "tgh", label));
+    ok.forEach((f) => opt("film:" + cacheKey(f), f.title, (sw) => { sw.style.backgroundImage = "url(" + bdUrl(bdPaths[cacheKey(f)], "w300") + ")"; }));
+  };
+  group("Movies", FILMS.filter((f) => f.type !== "tv")); group("Series", FILMS.filter((f) => f.type === "tv"));
   $("themeHint").hidden = !unresolved || !!key;
 }
 $("themeBtn").onclick = async () => { paintThemes(); $("themeDlg").showModal(); await resolveBackdrops(); paintThemes(); };

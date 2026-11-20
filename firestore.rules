@@ -164,7 +164,7 @@ service cloud.firestore {
       allow read: if true;
       allow write: if signedIn()
         && request.resource.data.keys().hasOnly(['paths', 'updatedAt'])
-        && request.resource.data.paths is map && request.resource.data.paths.size() <= 60
+        && request.resource.data.paths is map && request.resource.data.paths.size() <= 100
         && request.resource.data.updatedAt is number;
     }
 
