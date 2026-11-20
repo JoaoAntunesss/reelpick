@@ -362,3 +362,15 @@ button.sm{padding:5px 12px;font-size:13px;border-radius:999px}
 .cform input{flex:1;background:#150e24;border:1px solid var(--line);border-radius:999px;color:var(--text);padding:8px 14px;font:inherit}
 @media (prefers-reduced-motion:reduce){.pact i{transition:none}}
 #feedList,.fitem,.fbody>div{min-width:0;max-width:100%}.cform input{min-width:0}.pacts{flex-wrap:wrap}@media (max-width:420px){.pact{padding:6px 9px}}
+
+/* friend suggestions & blocking */
+.suggest{margin:0 0 14px}
+.suggest h2{font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);margin:0 0 10px}
+.sugg{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin}
+.scard{position:relative;flex:none;width:150px;display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 10px 12px;border:1px solid var(--line);border-radius:16px;background:color-mix(in srgb,var(--panel) 92%,transparent)}
+.sopen{display:flex;flex-direction:column;align-items:center;gap:4px;border:0;background:none;padding:0;max-width:100%}
+.sopen b{max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sopen small{color:var(--muted);font-size:12px}
+.scard .cta{width:100%}
+.sx{position:absolute;top:4px;right:6px;border:0;background:none;color:var(--muted);padding:2px 6px;font-size:16px}
+button.danger{color:#ff8a8a;border-color:#5a2030}
+@media (max-width:1000px){#suggest{order:3}.feedview .feedtop{order:4}#feedList{order:5}}

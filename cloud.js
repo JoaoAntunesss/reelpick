@@ -49,6 +49,16 @@ export async function init(config) {
       const q = query(collection(db, "handles"), where(documentId(), ">=", prefix), where(documentId(), "<", prefix + ""), limit(10));
       return (await getDocs(q)).docs.map((d) => ({ handle: d.id, uid: d.data().uid }));
     },
+    /** Everyone with a nickname (few users), for friend suggestions. */
+    async allHandles(n = 100) { return (await getDocs(query(collection(db, "handles"), limit(n)))).docs.map((d) => ({ handle: d.id, uid: d.data().uid })); },
+    // ---- blocking
+    async myBlocks() { return (await getDocs(collection(db, "users", me(), "blocks"))).docs.map((d) => ({ uid: d.id, ...d.data() })); },
+    async block(uid2, name, handle) {
+      const uid = me();
+      await setDoc(doc(db, "users", uid, "blocks", uid2), { at: Date.now(), name: String(name || "").slice(0, 40), handle: String(handle || "").slice(0, 20) });
+      await Promise.all([deleteDoc(doc(db, "friendships", pairId(uid, uid2))), deleteDoc(doc(db, "requests", uid + "_" + uid2)), deleteDoc(doc(db, "requests", uid2 + "_" + uid))].map((p) => p.catch(() => {})));
+    },
+    async unblock(uid2) { await deleteDoc(doc(db, "users", me(), "blocks", uid2)); },
     /** Profile card if the rules let me read it, otherwise null. */
     async peek(uid) { try { return fromDoc(await getDoc(userDoc(uid))); } catch (e) { return null; } },
     async loadProfile(uid) {
@@ -168,7 +178,7 @@ export async function init(config) {
 
     async deleteAccount(handle) {
       const uid = me(), f = collection(db, "friendships"), r = collection(db, "requests");
-      const lists = await Promise.all([getDocs(seenCol(uid)), getDocs(collection(db, "users", uid, "reposts")), getDocs(query(f, where("a", "==", uid))), getDocs(query(f, where("b", "==", uid))), getDocs(query(r, where("to", "==", uid))), getDocs(query(r, where("from", "==", uid)))]);
+      const lists = await Promise.all([getDocs(seenCol(uid)), getDocs(collection(db, "users", uid, "reposts")), getDocs(collection(db, "users", uid, "blocks")), getDocs(query(f, where("a", "==", uid))), getDocs(query(f, where("b", "==", uid))), getDocs(query(r, where("to", "==", uid))), getDocs(query(r, where("from", "==", uid)))]);
       for (const l of lists) await deleteAll(l.docs);
       try {
         const chats = await getDocs(query(collection(db, "chats"), where("members", "array-contains", uid)));

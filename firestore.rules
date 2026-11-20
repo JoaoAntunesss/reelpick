@@ -8,8 +8,10 @@ service cloud.firestore {
     function isFriend(uid) { return signedIn() && exists(/databases/$(database)/documents/friendships/$(pairId(request.auth.uid, uid))); }
     function profileOf(uid) { return get(/databases/$(database)/documents/users/$(uid)).data; }
     // Who may read someone's profile and watched list: the owner, accepted friends (if visibility is friends/public), anyone signed in (if public).
+    // blocked(uid): the owner of uid has blocked the person asking.
+    function blocked(uid) { return exists(/databases/$(database)/documents/users/$(uid)/blocks/$(request.auth.uid)); }
     function canView(uid) {
-      return isOwner(uid) || (signedIn() && (profileOf(uid).visibility == 'public' || (profileOf(uid).visibility == 'friends' && isFriend(uid))));
+      return isOwner(uid) || (signedIn() && !blocked(uid) && (profileOf(uid).visibility == 'public' || (profileOf(uid).visibility == 'friends' && isFriend(uid))));
     }
 
     function validPinned(p) {
@@ -43,7 +45,7 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if isOwner(uid) || (signedIn() && (resource.data.visibility == 'public' || (resource.data.visibility == 'friends' && isFriend(uid))));
+      allow read: if isOwner(uid) || (signedIn() && !blocked(uid) && (resource.data.visibility == 'public' || (resource.data.visibility == 'friends' && isFriend(uid))));
       allow create, update: if isOwner(uid) && validProfile(request.resource.data);
       allow delete: if isOwner(uid);
 
@@ -76,6 +78,16 @@ service cloud.firestore {
         }
       }
 
+      // People I blocked: only I can see and change this list.
+      match /blocks/{other} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && other != uid
+          && request.resource.data.keys().hasOnly(['at', 'name', 'handle'])
+          && request.resource.data.at is number
+          && request.resource.data.name is string && request.resource.data.name.size() <= 40
+          && request.resource.data.handle is string && request.resource.data.handle.size() <= 20;
+      }
+
       // Reposts: someone else's post shared on my feed (only if that person's profile is not private).
       match /reposts/{rid} {
         allow read: if canView(uid);
@@ -106,6 +118,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['from', 'to', 'fromName', 'fromHandle', 'toHandle', 'createdAt'])
         && request.resource.data.from == request.auth.uid && request.resource.data.to is string && request.resource.data.to != request.auth.uid
         && id == request.auth.uid + '_' + request.resource.data.to
+        && !exists(/databases/$(database)/documents/users/$(request.resource.data.to)/blocks/$(request.auth.uid))
         && request.resource.data.fromName is string && request.resource.data.fromName.size() <= 40
         && request.resource.data.fromHandle is string && request.resource.data.fromHandle.size() <= 20
         && request.resource.data.toHandle is string && request.resource.data.toHandle.size() <= 20

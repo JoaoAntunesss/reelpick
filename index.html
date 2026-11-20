@@ -42,6 +42,10 @@
     </section>
     <section id="feed" class="feed" aria-labelledby="feedH" hidden>
       <div id="feedFriends" class="stories" aria-label="Your friends"></div>
+      <section id="suggest" class="suggest" hidden>
+        <h2>People you may know</h2>
+        <div id="suggestList" class="sugg"></div>
+      </section>
       <div class="feedtop">
         <h2 id="feedH">Friends' feed</h2>
         <button type="button" id="feedRefresh" class="ghost sm">Refresh</button>
@@ -249,6 +253,8 @@
       <select id="pVis"><option value="private">Only me</option><option value="friends">My friends (people I accepted)</option><option value="public">Any signed-in person who knows my nickname</option></select>
     </label>
     <label>Share link <span class="inline"><input id="pLink" readonly><button type="button" id="pCopy">Copy</button></span></label>
+    <h4>Blocked people</h4>
+    <div id="pBlocked" class="flist"></div>
     <h4>Pinned recommendation</h4>
     <div id="pPinned" class="pinned"></div>
     <p class="hint"><b>What is stored:</b> display name, nickname, photo, about me, watched list, ratings and reviews, in Google Firebase. Your email is never shown to anyone. Strangers only see your nickname. You can delete everything below.</p>
@@ -279,7 +285,7 @@
     <div id="vPinned"></div>
     <div class="tabs" role="tablist"><button type="button" id="vTabR" class="tab sel" role="tab">Reviews</button><button type="button" id="vTabC" class="tab" role="tab">Compared with me</button></div>
     <div id="vBody" class="vbody"></div>
-    <div class="row"><button type="button" id="vMsg" hidden>💬 Message</button><button type="button" id="vAdd" hidden>Add friend</button><button value="close" class="ghost">Close</button></div>
+    <div class="row"><button type="button" id="vMsg" hidden>💬 Message</button><button type="button" id="vBlock" class="ghost danger" hidden>🚫 Block</button><button type="button" id="vAdd" hidden>Add friend</button><button value="close" class="ghost">Close</button></div>
   </form>
 </dialog>
 

@@ -22,6 +22,8 @@ export async function initSocial(ctx) {
   let cloud;
   try { cloud = await (await import("./cloud.js")).init(cfg); } catch (e) { console.warn("Cloud unavailable:", e); return off; }
 
+  let blocked = new Map();   // uid -> {name, handle}
+  const isBlocked = (uid) => blocked.has(uid);
   let me = null, profile = null, friends = [], incoming = [], outgoing = [], wasIn = false, keepLocal = false, tab = "find", lastSearch = "";
   const guard = (p) => Promise.resolve(p).catch((e) => { console.warn(e); say("Could not talk to your account (" + (e.code || e.message) + ")."); });
   const confirmBtn = (btn, label) => { if (btn.dataset.armed === "1") { btn.dataset.armed = ""; btn.textContent = label; return true; } btn.dataset.armed = "1"; btn.textContent = "Click again to confirm"; setTimeout(() => { btn.dataset.armed = ""; btn.textContent = label; }, 4000); return false; };
@@ -44,6 +46,7 @@ export async function initSocial(ctx) {
     $("reqBadge").hidden = !incoming.length; $("reqBadge").textContent = incoming.length;
     if (me) $("friendsBtn").title = incoming.length ? incoming.length + " pending friend request(s)" : "People";
   }
+  async function loadBlocks() { try { blocked = new Map((await cloud.myBlocks()).map((b) => [b.uid, b])); } catch (e) { console.warn("blocks", e); } }
   async function refreshSocial() { const s = await cloud.loadSocial(); friends = s.friends; incoming = s.incoming; outgoing = s.outgoing; paintAccount(); }
 
   async function syncDown(user) {
@@ -64,12 +67,13 @@ export async function initSocial(ctx) {
     me = user;
     if (user) {
       wasIn = true;
+      await loadBlocks();
       try { await syncDown(user); } catch (e) { console.warn(e); say("Signed in, but the cloud could not be read (" + (e.code || e.message) + "). Check the Firestore rules."); }
       paintAccount(); loadFeed(true); startChats(); paintNotifBtn(); delete lbCache.friends; delete lbCache.all; if (curTab === "top") loadBoard(true);
       const nick = normalizeHandle(new URLSearchParams(location.search).get("p"));
       if (nick && profile) { history.replaceState(null, "", location.pathname + location.hash); const uid = await guard(cloud.findHandle(nick)); if (uid) openProfile(uid, { handle: nick }); else say("Nobody uses the nickname @" + nick + "."); }
     } else {
-      profile = null; friends = []; incoming = []; outgoing = []; $("feedFriends").replaceChildren(); $("feedList").replaceChildren(); feedAt = 0;
+      profile = null; friends = []; blocked = new Map(); sugg = null; $("suggest").hidden = true; incoming = []; outgoing = []; $("feedFriends").replaceChildren(); $("feedList").replaceChildren(); feedAt = 0;
       if (wasIn && !keepLocal) { seen.clear(); saveSeen(); renderSeen(); }   // the list stays in the account
       wasIn = false; keepLocal = false; stopChats(); paintAccount(); delete lbCache.friends; delete lbCache.all; if (curTab === "top") loadBoard(true);
       const nick = normalizeHandle(new URLSearchParams(location.search).get("p"));
@@ -90,7 +94,12 @@ export async function initSocial(ctx) {
   function openProfileDlg() {
     $("pTastes").textContent = hasTastes(profile.tastes) ? profile.tastes.genres.join(", ") : "not set"; $("pName").value = profile.name; $("pHandle").value = profile.handle || ""; $("pBio").value = profile.bio || ""; $("pVis").value = profile.visibility;
     $("pLink").value = link() || "Set a nickname to get a link"; paintPinned($("pPinned"), profile.pinned, true); paintMyAvatar();
-    $("pDelete").textContent = "Delete my account and data"; $("profileDlg").showModal();
+    $("pDelete").textContent = "Delete my account and data"; paintBlocked(); $("profileDlg").showModal();
+  }
+  function paintBlocked() {
+    const box = $("pBlocked"); box.replaceChildren();
+    if (!blocked.size) { box.appendChild(el("p", "hint", "You haven't blocked anyone.")); return; }
+    blocked.forEach((b, uid) => box.appendChild(personRow({ name: b.name || "@" + b.handle, handle: b.name ? b.handle : "", actions: [["Unblock", async () => { await guard(cloud.unblock(uid)); blocked.delete(uid); paintBlocked(); loadSuggestions(true); loadFeed(true); }, true]] })));
   }
   async function saveProfileFields() {
     profile.name = $("pName").value.trim().slice(0, 40) || profile.name;
@@ -144,11 +153,15 @@ export async function initSocial(ctx) {
     } else if (lastSearch) {
       box.appendChild(el("p", "hint", "Searching…"));
       let found = []; try { found = await cloud.searchHandles(lastSearch); } catch (e) { box.replaceChildren(el("p", "hint", "Search failed (" + (e.code || e.message) + ").")); return; }
-      found = found.filter((x) => x.uid !== me.uid); box.replaceChildren();
+      found = found.filter((x) => x.uid !== me.uid && !isBlocked(x.uid)); box.replaceChildren();
       if (!found.length) box.appendChild(el("p", "hint", "Nobody found with a nickname starting with “" + lastSearch + "”."));
       for (const f of found) { const c = await cloud.peek(f.uid);
         box.appendChild(personRow({ name: (c && c.name) || "@" + f.handle, handle: c && c.name ? f.handle : "", photo: c && c.photo, sub: c ? (c.bio || "").slice(0, 70) : "Profile not shown", actions: [...(c ? [["View", () => { $("friendsDlg").close(); openProfile(f.uid, { handle: f.handle }); }, true]] : []), ...actionsFor(f.uid, f.handle)] })); }
-    } else box.appendChild(el("p", "hint", "Type a nickname (or the first letters) and press Search."));
+    } else {
+      box.appendChild(el("p", "hint", "Type a nickname (or the first letters) and press Search."));
+      const sg = await loadSuggestions(false);
+      if (sg.length && tab === "find" && !lastSearch) { box.appendChild(el("h4", null, "People you may know")); sg.forEach((p) => box.appendChild(personRow({ name: p.name || "@" + p.handle, handle: p.name ? p.handle : "", photo: p.photo, sub: p.bio ? p.bio.slice(0, 70) : "", actions: [...(p.visible ? [["View", () => { $("friendsDlg").close(); openProfile(p.uid, { handle: p.handle }); }, true]] : []), ...actionsFor(p.uid, p.handle)] }))); }
+    }
   }
   const runSearch = () => { const v = $("fNick").value.trim().replace(/^@/, "").toLowerCase(); if (!/^[a-z0-9_]{2,20}$/.test(v)) { say("Type at least 2 letters or numbers."); return; } lastSearch = v; tab = "find"; paintPeople(); };
 
@@ -196,6 +209,14 @@ export async function initSocial(ctx) {
       tR.onclick = () => show("r"); tC.onclick = () => show("c"); tC.hidden = uid === me.uid; show("r"); }
     const btn = $("vAdd"), paintBtn = () => { const r = relation(uid); btn.hidden = r === "me"; btn.textContent = { friend: "Remove friend", incoming: "Accept friend request", outgoing: "Request sent · Cancel", none: "Add friend" }[r] || ""; btn.className = r === "friend" || r === "outgoing" ? "ghost" : ""; $("vMsg").hidden = r !== "friend"; };
     $("vMsg").onclick = () => { $("viewDlg").close(); openChat(uid); };
+    const vb = $("vBlock"); vb.hidden = !me || uid === me.uid; vb.dataset.armed = ""; vb.textContent = "🚫 Block";
+    vb.onclick = async () => {
+      if (!confirmBtn(vb, "🚫 Block")) return;
+      const nm = (data && data.profile && data.profile.name) || hint.name || "", hd = handle || "";
+      try { await cloud.block(uid, nm, hd); blocked.set(uid, { name: nm, handle: hd }); $("viewDlg").close(); say("Blocked. They can no longer see your profile, posts or message you."); }
+      catch (e) { say("Could not block (" + (e.code || e.message) + ")."); return; }
+      await guard(refreshSocial()); loadFeed(true); loadSuggestions(true); delete lbCache.friends; delete lbCache.all; if (chatWith === uid) closeChat();
+    };
     paintBtn();
     btn.onclick = async () => { const r = relation(uid);
       if (r === "friend") { if (!confirmBtn(btn, "Remove friend")) return; await guard(cloud.removeFriend(uid)); }
@@ -254,7 +275,7 @@ export async function initSocial(ctx) {
     const box = $("feedList"); box.replaceChildren();
     if (noFriends) box.appendChild(emptyCard("Add friends in People to see what they are watching and what they thought of it.", "Find people", () => $("friendsBtn").click()));
     if (!entries.length) { if (!noFriends) box.appendChild(emptyCard("Your friends have not logged anything yet. When they mark a title as seen, it shows up here.")); return; }
-    for (const e of entries) box.appendChild(postCard(e));
+    for (const e of entries) if (!isBlocked(e.uid) && !(e.by && isBlocked(e.by.uid))) box.appendChild(postCard(e));
   }
   function postCard(e) {
     const a = el("article", "fitem"), it = e.item, mine = e.uid === me.uid, key = postKey(it), rid = e.uid + "_" + key;
@@ -307,7 +328,7 @@ export async function initSocial(ctx) {
     async function loadComments() {
       box.replaceChildren(el("p", "hint", "Loading…"));
       let list = []; try { list = await cloud.loadComments(e.uid, key); } catch (err) { box.replaceChildren(el("p", "hint", "Could not load comments (" + (err.code || err.message) + ").")); return; }
-      st.comments = list.length; paint(); box.replaceChildren();
+      list = list.filter((c) => !isBlocked(c.from)); st.comments = list.length; paint(); box.replaceChildren();
       for (const c of list) {
         const r = el("div", "cmt");
         const nm = el("button", "cname", c.from === me.uid ? "You" : c.name || "@" + c.handle); nm.type = "button"; nm.onclick = () => (c.from === me.uid ? openProfileDlg() : openProfile(c.from, { handle: c.handle }));
@@ -337,7 +358,8 @@ export async function initSocial(ctx) {
     try {
       const [peopleList, rps] = await Promise.all([cloud.friendFeed([{ uid: me.uid, name: profile.name, handle: profile.handle }, ...friends]), cloud.myReposts().catch(() => [])]);
       myReposts = new Set(rps); feedAt = Date.now();
-      paintFeedFriends(peopleList.filter((p) => p.uid !== me.uid)); paintFeedList(buildFeed(peopleList), !friends.length);
+      paintFeedFriends(peopleList.filter((p) => p.uid !== me.uid && !isBlocked(p.uid))); paintFeedList(buildFeed(peopleList), !friends.length);
+      loadSuggestions(false);
     } catch (e) { console.warn(e); list.replaceChildren(el("p", "hint", "Could not load the feed (" + (e.code || e.message) + ").")); }
     feedBusy = false;
   }
@@ -369,7 +391,7 @@ export async function initSocial(ctx) {
     try {
       const mine = { uid: me.uid, name: profile.name, handle: profile.handle };
       const people = scope === "friends" ? [mine, ...friends] : [mine, ...(await cloud.publicPeople(50))];
-      lbCache[scope] = await cloud.board(people);
+      lbCache[scope] = (await cloud.board(people.filter((x) => !isBlocked(x.uid))));
       if (scope === lbScope) paintBoard(lbCache[scope]);
     } catch (e) { console.warn(e); $("lbList").replaceChildren(el("li", "hint", "Could not load the leaderboard (" + (e.code || e.message) + ").")); }
     lbBusy = false;
@@ -377,6 +399,36 @@ export async function initSocial(ctx) {
   document.querySelectorAll("#lbSeg button").forEach((b) => { b.onclick = () => { lbScope = b.dataset.v; document.querySelectorAll("#lbSeg button").forEach((x) => x.classList.toggle("on", x === b)); loadBoard(false); }; });
   let curTab = "feed";
   const onTab = (t) => { curTab = t; if (t === "top") loadBoard(false); if (t === "feed") loadFeed(false); if (t === "chat") { paintChatList(); paintNotifBtn(); if (chatWith) cloud.markRead(chatWith); } paintBadge(); };
+
+  // ---------------------------------------------------------------- friend suggestions (few users: show everyone with a nickname)
+  let sugg = null, suggAt = 0;
+  async function loadSuggestions(force) {
+    if (!me) return [];
+    if (!sugg || force || Date.now() - suggAt > 120e3) {
+      let all = []; try { all = await cloud.allHandles(100); } catch (e) { console.warn("suggestions", e); }
+      const skip = new Set([me.uid, ...friends.map((f) => f.uid), ...outgoing.map((r) => r.to), ...incoming.map((r) => r.from), ...blocked.keys()]);
+      const uniq = new Map(); all.forEach((h) => { if (h.uid && !skip.has(h.uid) && !uniq.has(h.uid)) uniq.set(h.uid, h); });
+      const list = [...uniq.values()].sort(() => Math.random() - 0.5).slice(0, 12);
+      sugg = await Promise.all(list.map(async (h) => { const c = await cloud.peek(h.uid); return { uid: h.uid, handle: h.handle, name: c ? c.name : "", photo: c ? c.photo : null, bio: c ? c.bio : "", visible: !!c }; }));
+      suggAt = Date.now();
+    }
+    paintSuggestions(); return sugg;
+  }
+  function paintSuggestions() {
+    const box = $("suggestList"), list = (sugg || []).filter((p) => relation(p.uid) === "none" && !isBlocked(p.uid));
+    $("suggest").hidden = !me || !list.length; box.replaceChildren();
+    for (const p of list) {
+      const name = p.name || "@" + p.handle;
+      const c = el("div", "scard");
+      const top = el("button", "sopen"); top.type = "button"; top.onclick = () => openProfile(p.uid, { handle: p.handle });
+      top.appendChild(avatar(p.photo, name)); top.appendChild(el("b", null, name)); if (p.name) top.appendChild(el("small", null, "@" + p.handle));
+      c.appendChild(top);
+      const add = el("button", "cta sm", "Add friend"); add.type = "button";
+      add.onclick = async () => { add.disabled = true; add.textContent = "request sent"; await guard(cloud.sendRequest(p.uid, p.handle, profile.name, profile.handle || "")); await guard(refreshSocial()); setTimeout(paintSuggestions, 1200); };
+      const x = el("button", "sx", "×"); x.type = "button"; x.title = "Hide"; x.onclick = () => { sugg = sugg.filter((q) => q.uid !== p.uid); paintSuggestions(); };
+      c.append(add, x); box.appendChild(c);
+    }
+  }
 
   // ---------------------------------------------------------------- chat
   let chats = [], unChats = null, unMsgs = null, chatWith = null, pendingShare = null, lastSeenAt = 0;
