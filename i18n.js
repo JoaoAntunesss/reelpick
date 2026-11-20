@@ -182,6 +182,7 @@ const T = {
   "Favourite actor or actress": "Ator ou atriz favorito", "Watching now": "A ver agora", "City": "Cidade", "About you (shown on your profile)": "Sobre ti (aparece no teu perfil)",
   "Sign in to see profiles.": "Entra para veres perfis.", "Share a photo or a thought from the feed.": "Partilha uma foto ou uma ideia a partir do feed.", "No posts yet.": "Ainda sem publicações.",
   "See all": "Ver tudo", "No reviews yet. Write the first one!": "Ainda sem críticas. Escreve a primeira!",
+  "Show me in friend suggestions (only my name, nickname and photo)": "Aparecer nas sugestões de amizade (só o nome, a alcunha e a foto)",
   "You:": "Tu:", "You": "Tu", "shared": "partilhou", "shared it": "partilhaste", " wrote a review": " escreveste uma crítica", " watched it": " viste", "Like": "Gosto", "Comments": "Comentários", "Share on my feed": "Partilhar no meu feed",
   "Shared": "Partilhado", "Share": "Partilhar", "Liked by": "Gostam:", "Shared on your feed.": "Partilhado no teu feed.",
   "This post can't be shared (private profile).": "Este post não pode ser partilhado (perfil privado).",

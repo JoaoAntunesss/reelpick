@@ -12,6 +12,8 @@ export async function init(config) {
   const toDoc = (p) => ({ ...sanitizeProfile(p), updatedAt: Date.now() });
   const fromDoc = (s) => (s.exists() ? sanitizeProfile(s.data()) : null);
   const reqOut = (r) => ({ from: r.from, to: r.to, fromName: String(r.fromName || "").slice(0, 40), fromHandle: String(r.fromHandle || "").slice(0, 20), toHandle: String(r.toHandle || "").slice(0, 20), createdAt: r.createdAt || 0 });
+  let discover = true;   // "show me in friend suggestions"
+  const cardOf = (p) => { const x = sanitizeProfile(p); return { name: x.name, handle: x.handle || null, photo: x.photo || null, discover, updatedAt: Date.now() }; };
   const deleteAll = async (docs) => { for (const part of chunks(docs)) { const b = writeBatch(db); part.forEach((d) => b.delete(d.ref)); await b.commit(); } };
 
   return {
@@ -21,12 +23,17 @@ export async function init(config) {
 
     async loadMine() {
       const uid = me();
-      const [p, s] = await Promise.all([getDoc(userDoc(uid)), getDocs(seenCol(uid))]);
+      const [p, s, c] = await Promise.all([getDoc(userDoc(uid)), getDocs(seenCol(uid)), getDoc(doc(db, "cards", uid)).catch(() => null)]);
+      if (c && c.exists() && c.data().discover === false) discover = false;
       let posts = [];
       try { posts = (await getDocs(query(collection(db, "users", uid, "posts"), orderBy("at", "desc"), limit(60)))).docs.map((d) => { const x = d.data(); return { id: d.id, text: String(x.text || ""), photo: typeof x.photo === "string" ? x.photo : null, at: x.at || 0 }; }); } catch (e) { /* none */ }
       return { profile: fromDoc(p), items: s.docs.map((d) => d.data()), posts };
     },
-    async saveProfile(p) { await setDoc(userDoc(me()), toDoc(p)); },
+    async saveProfile(p) { const uid = me(); const b = writeBatch(db); b.set(userDoc(uid), toDoc(p)); b.set(doc(db, "cards", uid), cardOf(p)); await b.commit(); },
+    getDiscover: () => discover,
+    setDiscover(v) { discover = !!v; },
+    /** Public mini cards (name, nickname, photo) of everyone, for suggestions and as a fallback for private profiles. */
+    async allCards(n = 200) { return (await getDocs(query(collection(db, "cards"), limit(n)))).docs.map((d) => ({ uid: d.id, ...d.data() })); },
     /** Claims a nickname (and frees the old one) in one atomic batch. */
     async setHandle(handle, oldHandle, profile) {
       const uid = me();
@@ -36,6 +43,7 @@ export async function init(config) {
       if (!existing.exists()) b.set(doc(db, "handles", handle), { uid });
       if (oldHandle && oldHandle !== handle) b.delete(doc(db, "handles", oldHandle));
       b.set(userDoc(uid), toDoc({ ...profile, handle }));
+      b.set(doc(db, "cards", uid), cardOf({ ...profile, handle }));
       await b.commit();
     },
     async saveItem(item) { const s = sanitizeItem(item); if (s) await setDoc(doc(seenCol(me()), keyOf(s)), s); },
@@ -62,7 +70,11 @@ export async function init(config) {
     },
     async unblock(uid2) { await deleteDoc(doc(db, "users", me(), "blocks", uid2)); },
     /** Profile card if the rules let me read it, otherwise null. */
-    async peek(uid) { try { return fromDoc(await getDoc(userDoc(uid))); } catch (e) { return null; } },
+    async peek(uid) {
+      try { const p = fromDoc(await getDoc(userDoc(uid))); if (p) return p; } catch (e) { /* not visible */ }
+      try { const c = await getDoc(doc(db, "cards", uid)); if (c.exists()) { const x = c.data(); return { name: x.name || "", handle: x.handle || "", photo: x.photo || null, bio: "", cardOnly: true }; } } catch (e) { /* none */ }
+      return null;
+    },
     async loadProfile(uid) {
       let p;
       try { p = await getDoc(userDoc(uid)); } catch (e) { throw Object.assign(new Error("private"), { code: "private" }); }
@@ -193,7 +205,7 @@ export async function init(config) {
         const chats = await getDocs(query(collection(db, "chats"), where("members", "array-contains", uid)));
         for (const c of chats.docs) { const mine = await getDocs(query(collection(db, "chats", c.id, "msgs"), where("from", "==", uid))); await deleteAll(mine.docs); }
       } catch (e) { console.warn("chats", e); }
-      const b = writeBatch(db); if (handle) b.delete(doc(db, "handles", handle)); b.delete(userDoc(uid)); await b.commit();
+      const b = writeBatch(db); if (handle) b.delete(doc(db, "handles", handle)); b.delete(userDoc(uid)); b.delete(doc(db, "cards", uid)); await b.commit();
       try { await deleteUser(auth.currentUser); }
       catch (e) { if (e.code === "auth/requires-recent-login") { await reauthenticateWithPopup(auth.currentUser, provider); await deleteUser(auth.currentUser); } else throw e; }
     },

@@ -68,7 +68,7 @@ export async function initSocial(ctx) {
     if (data.profile && hasTastes(data.profile.tastes)) ctx.tastes.set(data.profile.tastes);          // tastes saved in the account win
     else if (hasTastes(ctx.tastes.get())) { profile.tastes = ctx.tastes.get(); await guard(cloud.saveProfile(profile)); }    // first sign-in: keep the local ones
     else if (!data.profile) setTimeout(() => ctx.onNewProfile && ctx.onNewProfile(), 400);                                  // brand-new profile: ask what they like
-    if (!data.profile) await guard(cloud.saveProfile(profile));
+    await guard(cloud.saveProfile(profile));   // also refreshes the public card
     const { merged, toPush } = mergeSeen(seen, data.items);
     seen.clear(); merged.forEach((v, k) => seen.set(k, v));
     saveSeen(); renderSeen();
@@ -108,6 +108,7 @@ export async function initSocial(ctx) {
     $("pTastes").textContent = hasTastes(profile.tastes) ? profile.tastes.genres.join(", ") : "not set"; $("pName").value = profile.name; $("pHandle").value = profile.handle || ""; $("pBio").value = profile.bio || ""; $("pVis").value = profile.visibility;
     $("pLink").value = link() || "Set a nickname to get a link"; paintPinned($("pPinned"), profile.pinned, true); paintMyAvatar();
     INFO_LABELS.forEach(([k]) => { $("pi_" + k).value = (profile.info && profile.info[k]) || ""; });
+    $("pDiscover").checked = cloud.getDiscover();
     $("pDelete").textContent = "Delete my account and data"; paintBlocked(); $("profileDlg").showModal();
   }
   function paintBlocked() {
@@ -118,6 +119,7 @@ export async function initSocial(ctx) {
   async function saveProfileFields() {
     profile.name = $("pName").value.trim().slice(0, 40) || profile.name;
     profile.bio = $("pBio").value.trim().slice(0, 300); profile.visibility = $("pVis").value;
+    cloud.setDiscover($("pDiscover").checked);
     const info = {}; INFO_LABELS.forEach(([k]) => { const v = $("pi_" + k).value.trim().slice(0, 80); if (v) info[k] = v; }); profile.info = Object.keys(info).length ? info : null;
     await guard(cloud.saveProfile(profile)); paintAccount(); say("Profile saved."); if (curTab === "profile" && prUid === me.uid) renderProfilePage(me.uid);
   }
@@ -537,11 +539,14 @@ export async function initSocial(ctx) {
   async function loadSuggestions(force) {
     if (!me) return [];
     if (!sugg || force || Date.now() - suggAt > 120e3) {
-      let all = []; try { all = await cloud.allHandles(100); } catch (e) { console.warn("suggestions", e); }
+      let cards = [], handles = [];
+      try { [cards, handles] = await Promise.all([cloud.allCards(200), cloud.allHandles(200)]); } catch (e) { console.warn("suggestions", e); }
       const skip = new Set([me.uid, ...friends.map((f) => f.uid), ...outgoing.map((r) => r.to), ...incoming.map((r) => r.from), ...blocked.keys()]);
-      const uniq = new Map(); all.forEach((h) => { if (h.uid && !skip.has(h.uid) && !uniq.has(h.uid)) uniq.set(h.uid, h); });
-      const list = [...uniq.values()].sort(() => Math.random() - 0.5).slice(0, 12);
-      sugg = await Promise.all(list.map(async (h) => { const c = await cloud.peek(h.uid); return { uid: h.uid, handle: h.handle, name: c ? c.name : "", photo: c ? c.photo : null, bio: c ? c.bio : "", visible: !!c }; }));
+      const withCard = new Set(cards.map((c) => c.uid)), pool = new Map();
+      cards.forEach((c) => { if (c.discover !== false && c.handle && !skip.has(c.uid)) pool.set(c.uid, { uid: c.uid, handle: c.handle, name: c.name || "", photo: c.photo || null, bio: "" }); });
+      handles.forEach((h) => { if (h.uid && !withCard.has(h.uid) && !skip.has(h.uid) && !pool.has(h.uid)) pool.set(h.uid, { uid: h.uid, handle: h.handle, name: "", photo: null, bio: "" }); });   // older accounts without a card yet
+      sugg = [...pool.values()].sort(() => Math.random() - 0.5).slice(0, 12);
+      await Promise.all(sugg.map(async (x) => { const c = await cloud.peek(x.uid); x.visible = !!(c && !c.cardOnly); if (c) { x.name = c.name || x.name; x.photo = c.photo || x.photo; x.bio = c.cardOnly ? "" : c.bio || ""; } }));
       suggAt = Date.now();
     }
     paintSuggestions(); return sugg;

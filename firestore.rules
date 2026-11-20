@@ -146,6 +146,19 @@ service cloud.firestore {
     }
 
     // Nickname -> uid lookup (also used by the search box). A nickname can be claimed once and never overwritten.
+    // Public mini card: only name, nickname and photo, so people can be found and suggested even with a private profile.
+    match /cards/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['name', 'handle', 'photo', 'discover', 'updatedAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() <= 40
+        && (request.resource.data.handle == null || (request.resource.data.handle is string && request.resource.data.handle.matches('^[a-z0-9_]{3,20}$')))
+        && (request.resource.data.photo == null || (request.resource.data.photo is string && request.resource.data.photo.size() <= 24000 && request.resource.data.photo.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]+$')))
+        && request.resource.data.discover is bool
+        && request.resource.data.updatedAt is number;
+      allow delete: if isOwner(uid);
+    }
+
     match /handles/{handle} {
       allow read: if signedIn();
       allow create: if signedIn() && handle.matches('^[a-z0-9_]{3,20}$')
