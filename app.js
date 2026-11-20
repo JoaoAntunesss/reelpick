@@ -1,10 +1,10 @@
-import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle, tasteGenreIds, hashStr, mulberry32, dayKey } from "./query.js";
-import { DEMO, DEMO_GENRES } from "./demo.js";
-import { supported, createReel3D } from "./reel3d.js";
-import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES } from "./seen.js";
-import { initSocial } from "./social.js";
-import { startI18n, tmdbLang, isPT, setLang } from "./i18n.js";
-import { FILMS, PLAIN, validPath, cacheKey } from "./themes.js";
+import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle, tasteGenreIds, hashStr, mulberry32, dayKey } from "./query.js?v=1795190198";
+import { DEMO, DEMO_GENRES } from "./demo.js?v=1795190198";
+import { supported, createReel3D } from "./reel3d.js?v=1795190198";
+import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES } from "./seen.js?v=1795190198";
+import { initSocial } from "./social.js?v=1795190198";
+import { startI18n, tmdbLang, isPT, setLang } from "./i18n.js?v=1795190198";
+import { FILMS, PLAIN, validPath, cacheKey } from "./themes.js?v=1795190198";
 startI18n();
 { const lb = document.getElementById("langBtn"); if (lb) { lb.textContent = isPT ? "English" : "Português"; lb.lang = isPT ? "en" : "pt-PT"; lb.title = isPT ? "Switch to English" : "Mudar para português"; lb.onclick = () => setLang(isPT ? "en" : "pt"); } }
 
