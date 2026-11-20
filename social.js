@@ -4,6 +4,17 @@ import { sanitizeItem, mergeSeen, compareLists, normalizeHandle, sanitizePinned,
 
 const stars = (n) => (n ? "★".repeat(n) + "☆".repeat(5 - n) : "not rated");
 
+async function toPhoto(file) {
+  if (!file || !/^image\//.test(file.type) || file.size > 25e6) throw new Error("Choose an image file (up to 25 MB).");
+  const bmp = await createImageBitmap(file);
+  for (const side of [1280, 1024, 800]) {
+    const k = Math.min(1, side / Math.max(bmp.width, bmp.height)), c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k); c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    for (let q = 0.82; q >= 0.5; q -= 0.08) { const u = c.toDataURL("image/jpeg", q); if (u.length <= 880000) return u; }
+  }
+  throw new Error("That image is too detailed. Try another one.");
+}
+
 async function toAvatar(file) {
   if (!file || !/^image\//.test(file.type) || file.size > 15e6) throw new Error("Choose an image file (up to 15 MB).");
   const bmp = await createImageBitmap(file), s = Math.min(bmp.width, bmp.height), c = document.createElement("canvas");
@@ -41,7 +52,8 @@ export async function initSocial(ctx) {
     $("signIn").hidden = !!me; $("who").hidden = !me; $("friendsBtn").hidden = !me; $("profileBtn").hidden = !me; $("signOut").hidden = !me;
     if (me && profile) $("who").textContent = profile.name + (profile.handle ? "  @" + profile.handle : "");
     $("ePinBox").hidden = !me;
-    $("feed").hidden = !me; $("welcome").hidden = !!me;
+    $("feed").hidden = !me; $("welcome").hidden = !!me; $("composer").hidden = !me;
+    if (me && profile) { $("compAv").replaceChildren(avatar(profile.photo, profile.name, "sm")); }
     if (me && profile) $("meAv").replaceChildren(avatar(profile.photo, profile.name, "sm"));
     $("reqBadge").hidden = !incoming.length; $("reqBadge").textContent = incoming.length;
     if (me) $("friendsBtn").title = incoming.length ? incoming.length + " pending friend request(s)" : "People";
@@ -278,6 +290,7 @@ export async function initSocial(ctx) {
     for (const e of entries) if (!isBlocked(e.uid) && !(e.by && isBlocked(e.by.uid))) box.appendChild(postCard(e));
   }
   function postCard(e) {
+    if (e.post) return photoCard(e);
     const a = el("article", "fitem"), it = e.item, mine = e.uid === me.uid, key = postKey(it), rid = e.uid + "_" + key;
     if (e.by) { const rp = el("div", "rphead"); rp.appendChild(el("span", null, "🔁")); rp.appendChild(el("b", null, e.by.uid === me.uid ? "You" : e.by.name)); rp.appendChild(el("span", null, e.by.uid === me.uid ? "shared it" : "shared")); a.appendChild(rp); }
     const who = el("button", "fwho"); who.type = "button"; who.onclick = () => (mine ? openProfileDlg() : openProfile(e.uid, { handle: e.handle }));
@@ -296,11 +309,15 @@ export async function initSocial(ctx) {
     const rv = el("p", it.review ? "freview" : "freview none", it.review ? "“" + it.review + "”" : "No review, just watched."); if (it.review) rv.translate = false; d.appendChild(rv);
     body.appendChild(d); a.appendChild(body);
 
+    socialBar(a, e, "seen", key, mine, rid, true);
+    return a;
+  }
+  function socialBar(a, e, col, key, mine, rid, shareable) {
     // actions: like · comments · repost · send
     const bar = el("div", "pacts"), st = { likes: 0, liked: false, comments: 0, likers: [] };
     const like = el("button", "pact like"); like.type = "button"; like.title = "Like";
     const com = el("button", "pact com"); com.type = "button"; com.title = "Comments";
-    const rp = el("button", "pact rp" + (myReposts.has(rid) ? " on" : "")); rp.type = "button"; rp.title = "Share on my feed";
+    const rp = el("button", "pact rp" + (rid && myReposts.has(rid) ? " on" : "")); rp.type = "button"; rp.title = "Share on my feed";
     const dm = el("button", "pact dm"); dm.type = "button"; dm.title = "Send to a friend";
     const likers = el("p", "likers");
     const paint = () => {
@@ -315,19 +332,19 @@ export async function initSocial(ctx) {
     like.onclick = async () => {
       const on = !st.liked; st.liked = on; st.likes += on ? 1 : -1; const nm = profile.name || ""; st.likers = on ? [nm, ...st.likers] : st.likers.filter((x) => x !== nm); paint();
       like.classList.add("pop"); setTimeout(() => like.classList.remove("pop"), 300);
-      try { await cloud.setLike(e.uid, key, on, profile.name); } catch (err) { st.liked = !on; st.likes += on ? -1 : 1; paint(); say("Could not save the like (" + (err.code || err.message) + ")."); }
+      try { await cloud.setLike(e.uid, key, on, profile.name, col); } catch (err) { st.liked = !on; st.likes += on ? -1 : 1; paint(); say("Could not save the like (" + (err.code || err.message) + ")."); }
     };
     rp.onclick = async () => {
       const on = !rp.classList.contains("on"); rp.classList.toggle("on", on); paint();
-      try { await cloud.setRepost(e.uid, e.name, e.handle, it, on); if (on) { myReposts.add(rid); say("Shared on your feed."); } else myReposts.delete(rid); }
+      try { await cloud.setRepost(e.uid, e.name, e.handle, e.item, on); if (on) { myReposts.add(rid); say("Shared on your feed."); } else myReposts.delete(rid); }
       catch (err) { rp.classList.toggle("on", !on); paint(); say(err.code === "permission-denied" ? "This post can't be shared (private profile)." : "Could not share (" + (err.code || err.message) + ")."); }
     };
-    dm.onclick = () => shareWith(it);
+    dm.onclick = () => shareWith(e.item);
     const box = el("div", "comments"); box.hidden = true;
     com.onclick = () => { box.hidden = !box.hidden; if (!box.hidden) loadComments(); };
     async function loadComments() {
       box.replaceChildren(el("p", "hint", "Loading…"));
-      let list = []; try { list = await cloud.loadComments(e.uid, key); } catch (err) { box.replaceChildren(el("p", "hint", "Could not load comments (" + (err.code || err.message) + ").")); return; }
+      let list = []; try { list = await cloud.loadComments(e.uid, key, col); } catch (err) { box.replaceChildren(el("p", "hint", "Could not load comments (" + (err.code || err.message) + ").")); return; }
       list = list.filter((c) => !isBlocked(c.from)); st.comments = list.length; paint(); box.replaceChildren();
       for (const c of list) {
         const r = el("div", "cmt");
@@ -335,19 +352,33 @@ export async function initSocial(ctx) {
         r.appendChild(nm);
         const t = el("span", "ctxt", c.text); t.translate = false; r.appendChild(t);
         r.appendChild(el("small", null, timeAgo(c.at)));
-        if (c.from === me.uid || mine) { const x = el("button", "cdel", "×"); x.type = "button"; x.title = "Delete comment"; x.onclick = async () => { try { await cloud.deleteComment(e.uid, key, c.id); loadComments(); } catch (err) { say("Could not delete (" + (err.code || err.message) + ")."); } }; r.appendChild(x); }
+        if (c.from === me.uid || mine) { const x = el("button", "cdel", "×"); x.type = "button"; x.title = "Delete comment"; x.onclick = async () => { try { await cloud.deleteComment(e.uid, key, c.id, col); loadComments(); } catch (err) { say("Could not delete (" + (err.code || err.message) + ")."); } }; r.appendChild(x); }
         box.appendChild(r);
       }
       const f = el("form", "cform"); const inp = el("input"); inp.maxLength = 500; inp.placeholder = "Write a comment…"; inp.setAttribute("aria-label", "Write a comment…");
       const send = el("button", "cta sm", "Post"); send.type = "submit"; f.append(inp, send);
       f.onsubmit = async (ev) => { ev.preventDefault(); const v = inp.value.trim(); if (!v) return; send.disabled = true;
-        try { await cloud.addComment(e.uid, key, v, me_()); await loadComments(); } catch (err) { say("Could not post the comment (" + (err.code || err.message) + ")."); send.disabled = false; } };
+        try { await cloud.addComment(e.uid, key, v, me_(), col); await loadComments(); } catch (err) { say("Could not post the comment (" + (err.code || err.message) + ")."); send.disabled = false; } };
       box.appendChild(f);
       if (!list.length) inp.focus();
     }
-    bar.append(like, com); if (!mine) bar.append(rp, dm);
+    bar.append(like, com); if (!mine && shareable) bar.append(rp, dm);
     a.append(bar, likers, box);
-    cloud.postStats(e.uid, key).then((x) => { Object.assign(st, x); paint(); }).catch(() => {});
+    cloud.postStats(e.uid, key, col).then((x) => { Object.assign(st, x); paint(); }).catch(() => {});
+  }
+  function photoCard(e) {
+    const a = el("article", "fitem ppost"), x = e.post, mine = e.uid === me.uid;
+    const head = el("div", "phead2");
+    const who = el("button", "fwho"); who.type = "button"; who.onclick = () => (mine ? openProfileDlg() : openProfile(e.uid, { handle: e.handle }));
+    who.appendChild(avatar(e.photo || (mine && profile ? profile.photo : null) || (people.get(e.uid) || {}).photo, e.name, "sm"));
+    const w = el("span"); w.appendChild(el("b", null, mine ? "You" : e.name)); if (e.handle) { const h = el("small", "hdl", " @" + e.handle); h.translate = false; w.appendChild(h); } who.appendChild(w);
+    who.appendChild(el("small", null, timeAgo(x.at)));
+    head.appendChild(who);
+    if (mine) { const del = el("button", "ghost sm pdel", "Delete"); del.type = "button"; del.onclick = async () => { if (!confirmBtn(del, "Delete")) return; try { await cloud.deletePost(x.id); a.remove(); } catch (err) { say("Could not delete (" + (err.code || err.message) + ")."); } }; head.appendChild(del); }
+    a.appendChild(head);
+    if (x.text) { const t = el("p", "ptext", x.text); t.translate = false; a.appendChild(t); }
+    if (x.photo && /^data:image\/jpeg;base64,/.test(x.photo)) { const im = el("img", "pphoto"); im.src = x.photo; im.alt = ""; im.loading = "lazy"; im.onclick = () => im.classList.toggle("full"); a.appendChild(im); }
+    socialBar(a, e, "posts", x.id, mine, null, false);
     return a;
   }
   async function loadFeed(force) {
@@ -399,6 +430,24 @@ export async function initSocial(ctx) {
   document.querySelectorAll("#lbSeg button").forEach((b) => { b.onclick = () => { lbScope = b.dataset.v; document.querySelectorAll("#lbSeg button").forEach((x) => x.classList.toggle("on", x === b)); loadBoard(false); }; });
   let curTab = "feed";
   const onTab = (t) => { curTab = t; if (t === "top") loadBoard(false); if (t === "feed") loadFeed(false); if (t === "chat") { paintChatList(); paintNotifBtn(); if (chatWith) cloud.markRead(chatWith); } paintBadge(); };
+
+  // ---------------------------------------------------------------- new post (text + photo)
+  let compPhoto = null;
+  const paintComp = () => {
+    const pv = $("compPrev"); pv.hidden = !compPhoto; pv.replaceChildren();
+    if (compPhoto) { const i = el("img"); i.src = compPhoto; i.alt = ""; const x = el("button", "ghost sm", "×"); x.type = "button"; x.setAttribute("aria-label", "Remove"); x.onclick = () => { compPhoto = null; paintComp(); }; pv.append(i, x); }
+    const n = $("compText").value.length; $("compCount").textContent = n > 800 ? n + "/1000" : "";
+    $("compPost").disabled = !compPhoto && !$("compText").value.trim();
+  };
+  $("compText").addEventListener("input", paintComp);
+  $("compPhoto").onclick = () => $("compFile").click();
+  $("compFile").onchange = async () => { const f = $("compFile").files[0]; $("compFile").value = ""; if (!f) return; $("compPost").disabled = true; try { compPhoto = await toPhoto(f); } catch (e) { say(e.message); } paintComp(); };
+  $("composer").onsubmit = async (ev) => {
+    ev.preventDefault(); const text = $("compText").value.trim(); if (!text && !compPhoto) return;
+    $("compPost").disabled = true;
+    try { await cloud.createPost(text, compPhoto); $("compText").value = ""; compPhoto = null; paintComp(); say("Posted."); loadFeed(true); }
+    catch (e) { say("Could not post (" + (e.code || e.message) + ")."); $("compPost").disabled = false; }
+  };
 
   // ---------------------------------------------------------------- friend suggestions (few users: show everyone with a nickname)
   let sugg = null, suggAt = 0;

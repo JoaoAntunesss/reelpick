@@ -44,6 +44,11 @@
     </section>
     <section id="feed" class="feed" aria-labelledby="feedH" hidden>
       <div id="feedFriends" class="stories" aria-label="Your friends"></div>
+      <form id="composer" class="card composer2" autocomplete="off" hidden>
+        <div class="crow1"><span id="compAv"></span><textarea id="compText" maxlength="1000" rows="2" placeholder="What are you watching? Share a photo or a thought…" aria-label="New post"></textarea></div>
+        <div id="compPrev" class="compprev" hidden></div>
+        <div class="crow2"><button type="button" id="compPhoto" class="ghost sm">📷 Photo</button><input type="file" id="compFile" accept="image/*" hidden><span id="compCount" class="hint"></span><button type="submit" id="compPost" class="cta sm" disabled>Post</button></div>
+      </form>
       <section id="suggest" class="suggest" hidden>
         <h2>People you may know</h2>
         <div id="suggestList" class="sugg"></div>

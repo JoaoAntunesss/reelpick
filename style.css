@@ -449,3 +449,21 @@ footer{border-top:1px solid var(--line);padding-top:16px}
   .brand{font-size:21px}
 }
 @media (max-width:700px){.appbar{backdrop-filter:none;background:#101317}}
+
+/* composer & photo posts */
+.composer2{padding:14px 16px;margin-bottom:14px}
+.crow1{display:flex;gap:12px;align-items:flex-start}
+.crow1 textarea{flex:1;background:transparent;border:0;resize:none;font-size:16px;padding:8px 0;min-height:44px;color:var(--text)}
+.crow1 textarea:focus{outline:none}
+.compprev{position:relative;margin:8px 0 0 52px}
+.compprev img{max-width:100%;max-height:320px;border-radius:10px;display:block}
+.compprev button{position:absolute;top:6px;left:6px;background:#000a;border:0;color:#fff;border-radius:50%;width:30px;height:30px;padding:0}
+.crow2{display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.crow2 .cta{margin-left:auto}.cta:disabled{opacity:.45;cursor:default}
+.phead2{display:flex;align-items:center;gap:8px}.phead2 .fwho{flex:1;padding-bottom:0}
+.hdl{color:var(--muted);font-weight:400}
+.ptext{margin:12px 0 0;font-size:16px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.pphoto{display:block;width:100%;max-height:560px;object-fit:cover;border-radius:10px;margin-top:12px;cursor:zoom-in;background:#13161b}
+.pphoto.full{max-height:none;object-fit:contain;cursor:zoom-out}
+.ppost .pacts{margin-top:10px}
+@media (max-width:1000px){#composer{order:2}#potd{order:3}#suggest{order:4}.feedview .feedtop{order:5}#feedList{order:6}}

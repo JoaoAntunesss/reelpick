@@ -78,6 +78,40 @@ service cloud.firestore {
         }
       }
 
+      // Photo / text posts. Photos are small JPEGs stored inline (no paid storage).
+      match /posts/{key} {
+        allow read: if canView(uid);
+        allow create: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['text', 'photo', 'at'])
+          && request.resource.data.text is string && request.resource.data.text.size() <= 1000
+          && (request.resource.data.photo == null || (request.resource.data.photo is string && request.resource.data.photo.size() <= 900000 && request.resource.data.photo.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]+$')))
+          && (request.resource.data.text.size() > 0 || request.resource.data.photo != null)
+          && request.resource.data.at is number;
+        allow delete: if isOwner(uid);
+
+        // Likes on this post: one per person, the doc id is the person's uid.
+        match /likes/{liker} {
+          allow read: if canView(uid);
+          allow create: if isOwner(liker) && canView(uid)
+            && request.resource.data.keys().hasOnly(['at', 'name'])
+            && request.resource.data.at is number
+            && request.resource.data.name is string && request.resource.data.name.size() <= 40;
+          allow delete: if isOwner(liker);
+        }
+        // Comments on this post: written by anyone who can see it; the author or the post owner can delete.
+        match /comments/{cid} {
+          allow read: if canView(uid);
+          allow create: if signedIn() && canView(uid)
+            && request.resource.data.keys().hasOnly(['from', 'name', 'handle', 'text', 'at'])
+            && request.resource.data.from == request.auth.uid
+            && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 500
+            && request.resource.data.name is string && request.resource.data.name.size() <= 40
+            && request.resource.data.handle is string && request.resource.data.handle.size() <= 20
+            && request.resource.data.at is number;
+          allow delete: if signedIn() && (resource.data.from == request.auth.uid || isOwner(uid));
+        }
+      }
+
       // People I blocked: only I can see and change this list.
       match /blocks/{other} {
         allow read, delete: if isOwner(uid);

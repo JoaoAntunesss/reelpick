@@ -73,11 +73,13 @@ export async function init(config) {
     async friendFeed(friendList, per = 8) {
       const one = async (f) => {
         try {
-          const [p, s, rp] = await Promise.all([getDoc(userDoc(f.uid)).catch(() => null), getDocs(query(seenCol(f.uid), orderBy("updatedAt", "desc"), limit(per))),
-            getDocs(query(collection(db, "users", f.uid, "reposts"), orderBy("at", "desc"), limit(per))).catch(() => null)]);
+          const [p, s, rp, ps] = await Promise.all([getDoc(userDoc(f.uid)).catch(() => null), getDocs(query(seenCol(f.uid), orderBy("updatedAt", "desc"), limit(per))),
+            getDocs(query(collection(db, "users", f.uid, "reposts"), orderBy("at", "desc"), limit(per))).catch(() => null),
+            getDocs(query(collection(db, "users", f.uid, "posts"), orderBy("at", "desc"), limit(per))).catch(() => null)]);
           const prof = p ? fromDoc(p) : null;
           const reposts = rp ? rp.docs.map((d) => { const x = d.data(), it = sanitizeItem(x.item || {}); return it ? { owner: x.owner, ownerName: x.ownerName || "", ownerHandle: x.ownerHandle || "", item: it, at: x.at || 0 } : null; }).filter(Boolean) : [];
-          return { uid: f.uid, profile: prof, name: (prof && prof.name) || f.name || "", handle: (prof && prof.handle) || f.handle || "", items: s.docs.map((d) => sanitizeItem(d.data())).filter(Boolean), reposts };
+          return { uid: f.uid, profile: prof, name: (prof && prof.name) || f.name || "", handle: (prof && prof.handle) || f.handle || "", items: s.docs.map((d) => sanitizeItem(d.data())).filter(Boolean), reposts,
+            posts: ps ? ps.docs.map((d) => { const x = d.data(); return { id: d.id, text: String(x.text || ""), photo: typeof x.photo === "string" ? x.photo : null, at: x.at || 0 }; }) : [] };
         } catch (e) { return { uid: f.uid, profile: null, name: f.name || "", handle: f.handle || "", items: [], hidden: true }; }
       };
       return Promise.all(friendList.slice(0, 40).map(one));
@@ -125,23 +127,26 @@ export async function init(config) {
     async removeFriend(uid2) { await deleteDoc(doc(db, "friendships", pairId(me(), uid2))); },
 
     // ------------------------------------------------ likes, comments and reposts on a post (= someone's seen title)
-    async postStats(owner, key) {
-      const uid = me(), base = ["users", owner, "seen", key];
+    async postStats(owner, key, col = "seen") {
+      const uid = me(), base = ["users", owner, col, key];
       const [l, c] = await Promise.all([getDocs(query(collection(db, ...base, "likes"), limit(500))), getCountFromServer(collection(db, ...base, "comments"))]);
       return { likes: l.size, liked: l.docs.some((d) => d.id === uid), likers: l.docs.slice(0, 20).map((d) => d.data().name || ""), comments: c.data().count };
     },
-    async setLike(owner, key, on, name) {
-      const ref = doc(db, "users", owner, "seen", key, "likes", me());
+    async setLike(owner, key, on, name, col = "seen") {
+      const ref = doc(db, "users", owner, col, key, "likes", me());
       if (on) await setDoc(ref, { at: Date.now(), name: String(name || "").slice(0, 40) }); else await deleteDoc(ref);
     },
-    async loadComments(owner, key) {
-      const s = await getDocs(query(collection(db, "users", owner, "seen", key, "comments"), orderBy("at"), limitToLast(100)));
+    async loadComments(owner, key, col = "seen") {
+      const s = await getDocs(query(collection(db, "users", owner, col, key, "comments"), orderBy("at"), limitToLast(100)));
       return s.docs.map((d) => ({ id: d.id, ...d.data() }));
     },
-    async addComment(owner, key, text, mine) {
-      await addDoc(collection(db, "users", owner, "seen", key, "comments"), { from: me(), name: String(mine.name || "").slice(0, 40), handle: String(mine.handle || "").slice(0, 20), text: String(text).slice(0, 500), at: Date.now() });
+    async addComment(owner, key, text, mine, col = "seen") {
+      await addDoc(collection(db, "users", owner, col, key, "comments"), { from: me(), name: String(mine.name || "").slice(0, 40), handle: String(mine.handle || "").slice(0, 20), text: String(text).slice(0, 500), at: Date.now() });
     },
-    async deleteComment(owner, key, id) { await deleteDoc(doc(db, "users", owner, "seen", key, "comments", id)); },
+    async deleteComment(owner, key, id, col = "seen") { await deleteDoc(doc(db, "users", owner, col, key, "comments", id)); },
+    // ---- photo / text posts
+    async createPost(text, photo) { await addDoc(collection(db, "users", me(), "posts"), { text: String(text || "").slice(0, 1000), photo: photo || null, at: Date.now() }); },
+    async deletePost(id) { await deleteDoc(doc(db, "users", me(), "posts", id)); },
     async myReposts() { const s = await getDocs(collection(db, "users", me(), "reposts")); return s.docs.map((d) => d.id); },
     async setRepost(owner, ownerName, ownerHandle, item, on) {
       const s = sanitizeItem(item), ref = doc(db, "users", me(), "reposts", owner + "_" + keyOf(s));
@@ -178,7 +183,7 @@ export async function init(config) {
 
     async deleteAccount(handle) {
       const uid = me(), f = collection(db, "friendships"), r = collection(db, "requests");
-      const lists = await Promise.all([getDocs(seenCol(uid)), getDocs(collection(db, "users", uid, "reposts")), getDocs(collection(db, "users", uid, "blocks")), getDocs(query(f, where("a", "==", uid))), getDocs(query(f, where("b", "==", uid))), getDocs(query(r, where("to", "==", uid))), getDocs(query(r, where("from", "==", uid)))]);
+      const lists = await Promise.all([getDocs(seenCol(uid)), getDocs(collection(db, "users", uid, "reposts")), getDocs(collection(db, "users", uid, "blocks")), getDocs(collection(db, "users", uid, "posts")), getDocs(query(f, where("a", "==", uid))), getDocs(query(f, where("b", "==", uid))), getDocs(query(r, where("to", "==", uid))), getDocs(query(r, where("from", "==", uid)))]);
       for (const l of lists) await deleteAll(l.docs);
       try {
         const chats = await getDocs(query(collection(db, "chats"), where("members", "array-contains", uid)));

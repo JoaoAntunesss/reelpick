@@ -88,6 +88,9 @@ export function buildFeed(people, max = 40) {
       const it = sanitizeItem(raw);
       if (it && it.updatedAt > 0) out.push({ uid: p.uid, name, handle: p.handle || "", photo, item: it, at: it.updatedAt, by: null });
     });
+    (p.posts || []).forEach((x) => {
+      if (x && x.id && x.at > 0 && (x.text || x.photo)) out.push({ uid: p.uid, name, handle: p.handle || "", photo, post: x, at: x.at, by: null });
+    });
     (p.reposts || []).forEach((r) => {
       const it = sanitizeItem(r.item);
       if (it && r.owner && r.at > 0) out.push({ uid: r.owner, name: r.ownerName || (r.ownerHandle ? "@" + r.ownerHandle : "A friend"), handle: r.ownerHandle || "", photo: null, item: it, at: r.at, by: { uid: p.uid, name } });
@@ -95,7 +98,7 @@ export function buildFeed(people, max = 40) {
   });
   out.sort((a, b) => b.at - a.at);
   const seenKeys = new Set();     // the same post shared by several people shows up once (newest first)
-  return out.filter((e) => { const k = e.uid + "|" + keyOf(e.item); if (seenKeys.has(k)) return false; seenKeys.add(k); return true; }).slice(0, max);
+  return out.filter((e) => { const k = e.uid + "|" + (e.post ? "post:" + e.post.id : keyOf(e.item)); if (seenKeys.has(k)) return false; seenKeys.add(k); return true; }).slice(0, max);
 }
 
 /** "just now", "5 min ago", "3 h ago", "2 days ago", then the date. */
