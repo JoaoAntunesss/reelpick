@@ -1,7 +1,7 @@
 // Accounts, nicknames, friend requests, profiles and comparison. Does nothing unless firebase-config.js has a config.
-import { isPT } from "./i18n.js?v=1795190298";
-import { icon } from "./icons.js?v=1795190298";
-import { sanitizeItem, mergeSeen, compareLists, normalizeHandle, sanitizePinned, validPhoto, sanitizeProfile, buildFeed, timeAgo } from "./seen.js?v=1795190298";
+import { isPT } from "./i18n.js?v=1795193773";
+import { icon } from "./icons.js?v=1795193773";
+import { sanitizeItem, mergeSeen, compareLists, normalizeHandle, sanitizePinned, validPhoto, sanitizeProfile, buildFeed, timeAgo } from "./seen.js?v=1795193773";
 
 const stars = (n) => (n ? "★".repeat(n) + "☆".repeat(5 - n) : "not rated");
 
@@ -29,10 +29,10 @@ export async function initSocial(ctx) {
   const hasTastes = (t) => t && t.genres && t.genres.length;
   const off = { enabled: false, signedIn: () => false, upsert() {}, remove() {}, pushMany() {}, pin: async () => {} };
   let cfg = null;
-  try { cfg = (await import("./firebase-config.js?v=1795190298")).firebaseConfig; } catch (e) { /* no config file */ }
+  try { cfg = (await import("./firebase-config.js?v=1795193773")).firebaseConfig; } catch (e) { /* no config file */ }
   if (!cfg) return off;
   let cloud;
-  try { cloud = await (await import("./cloud.js?v=1795190298")).init(cfg); } catch (e) { console.warn("Cloud unavailable:", e); return off; }
+  try { cloud = await (await import("./cloud.js?v=1795193773")).init(cfg); } catch (e) { console.warn("Cloud unavailable:", e); return off; }
 
   let blocked = new Map();   // uid -> {name, handle}
   const isBlocked = (uid) => blocked.has(uid);
@@ -67,8 +67,10 @@ export async function initSocial(ctx) {
     profile = data.profile || sanitizeProfile({ name: (user.displayName || "Me").split(" ")[0] || "Me", visibility: "friends" });
     if (data.profile && hasTastes(data.profile.tastes)) ctx.tastes.set(data.profile.tastes);          // tastes saved in the account win
     else if (hasTastes(ctx.tastes.get())) { profile.tastes = ctx.tastes.get(); await guard(cloud.saveProfile(profile)); }    // first sign-in: keep the local ones
-    else if (!data.profile) setTimeout(() => ctx.onNewProfile && ctx.onNewProfile(), 400);                                  // brand-new profile: ask what they like
+    const isNew = !data.profile;
     await guard(cloud.saveProfile(profile));   // also refreshes the public card
+    if (!profile.handle) setTimeout(() => askNickname(isNew), 300);                       // new accounts (and old ones without a nickname) pick one first
+    else if (isNew) setTimeout(() => ctx.onNewProfile && ctx.onNewProfile(), 400);         // brand-new profile: ask what they like
     const { merged, toPush } = mergeSeen(seen, data.items);
     seen.clear(); merged.forEach((v, k) => seen.set(k, v));
     saveSeen(); renderSeen();
@@ -123,6 +125,37 @@ export async function initSocial(ctx) {
     const info = {}; INFO_LABELS.forEach(([k]) => { const v = $("pi_" + k).value.trim().slice(0, 80); if (v) info[k] = v; }); profile.info = Object.keys(info).length ? info : null;
     await guard(cloud.saveProfile(profile)); paintAccount(); say("Profile saved."); if (curTab === "profile" && prUid === me.uid) renderProfilePage(me.uid);
   }
+  // ---------------------------------------------------------------- first sign-in: choose a nickname
+  let nkTimer = 0, nkSeq = 0, nkThenTastes = false;
+  function askNickname(thenTastes) {
+    nkThenTastes = thenTastes; $("nkName").value = profile.name || "";
+    const guess = normalizeHandle(String(profile.name || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9_]/g, "_").slice(0, 20));
+    $("nkHandle").value = guess || ""; checkNick(); $("nickDlg").showModal(); $("nkHandle").focus();
+  }
+  async function checkNick() {
+    const raw = $("nkHandle").value.trim().replace(/^@/, "").toLowerCase(), h = normalizeHandle(raw), msg = $("nkMsg"), seq = ++nkSeq;
+    $("nkSave").disabled = true; msg.className = "hint";
+    if (!h) { msg.textContent = "3 to 20 letters, numbers or _ . Nicknames are unique."; return; }
+    msg.textContent = "Checking…";
+    let uid = null; try { uid = await cloud.findHandle(h); } catch (e) { /* treat as free; the save checks again */ }
+    if (seq !== nkSeq) return;
+    if (uid && uid !== me.uid) { msg.textContent = "That nickname is taken. Try another."; msg.className = "hint bad"; return; }
+    msg.textContent = "@" + h + " is available."; msg.className = "hint good"; $("nkSave").disabled = !$("nkName").value.trim();
+  }
+  $("nkHandle").addEventListener("input", () => { clearTimeout(nkTimer); nkTimer = setTimeout(checkNick, 300); });
+  $("nkName").addEventListener("input", () => { if ($("nkMsg").classList.contains("good")) $("nkSave").disabled = !$("nkName").value.trim(); });
+  $("nickDlg").addEventListener("cancel", (e) => e.preventDefault());     // a nickname is required
+  $("nickForm").onsubmit = async (ev) => {
+    ev.preventDefault();
+    const h = normalizeHandle($("nkHandle").value), name = $("nkName").value.trim().slice(0, 40); if (!h || !name) return;
+    $("nkSave").disabled = true;
+    try {
+      profile.name = name; await cloud.setHandle(h, profile.handle, { ...profile, name }); profile.handle = h;
+      await guard(cloud.saveProfile(profile)); $("nickDlg").close(); paintAccount(); say("Nickname saved: @" + h);
+      if (nkThenTastes && ctx.onNewProfile) setTimeout(() => ctx.onNewProfile(), 300);
+    } catch (e) { $("nkMsg").textContent = e.code === "taken" ? "That nickname is taken. Try another." : "Could not save the nickname (" + (e.code || e.message) + ")."; $("nkMsg").className = "hint bad"; $("nkSave").disabled = false; }
+  };
+
   async function saveHandle() {
     const h = normalizeHandle($("pHandle").value);
     if (!h) { say("Nickname: 3 to 20 letters, numbers or _ ."); return; }

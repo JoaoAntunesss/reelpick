@@ -16,7 +16,7 @@
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=1795190298">
+<link rel="stylesheet" href="style.css?v=1795193773">
 </head>
 <body>
 <div id="bg" aria-hidden="true"></div>
@@ -333,6 +333,17 @@
   </form>
 </dialog>
 
+<dialog id="nickDlg">
+  <form method="dialog" id="nickForm" autocomplete="off">
+    <h3>Welcome to ReelPick</h3>
+    <p class="hint">Choose how people will see you. Your nickname is how friends find you, and it is unique.</p>
+    <label>Name <input id="nkName" maxlength="40" required></label>
+    <label>Nickname <span class="nkwrap"><span class="at">@</span><input id="nkHandle" maxlength="20" placeholder="e.g. joao_99" required></span></label>
+    <p id="nkMsg" class="hint">3 to 20 letters, numbers or _ . Nicknames are unique.</p>
+    <div class="row"><button type="submit" id="nkSave" class="cta" disabled>Continue</button></div>
+  </form>
+</dialog>
+
 <dialog id="logDlg" class="wide">
   <form method="dialog">
     <h3 id="logH">Log a movie or series</h3>
@@ -383,6 +394,6 @@
     <div class="row"><button value="save">Save</button><button value="demo" class="ghost">Use demo</button><button value="cancel" class="ghost">Close</button></div>
   </form>
 </dialog>
-<script type="module" src="app.js?v=1795190298"></script>
+<script type="module" src="app.js?v=1795193773"></script>
 </body>
 </html>
