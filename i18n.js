@@ -171,7 +171,10 @@ const T = {
   "No messages yet. Recommend something!": "Ainda sem mensagens. Recomenda alguma coisa!", "Loading…": "A carregar…",
   "Sign in with Google to send it to a friend.": "Entra com Google para enviares a um amigo.", "Add friends first, in People.": "Primeiro adiciona amigos, em Pessoas.",
   "On iPhone: tap Share, then “Add to Home Screen”.": "No iPhone: toca em Partilhar e depois em “Adicionar ao ecrã principal”.",
-  "You:": "Tu:", "All": "Todas", "All platforms": "Todas as plataformas",
+  "You:": "Tu:", "You": "Tu", "shared": "partilhou", "shared it": "partilhaste", " wrote a review": " escreveste uma crítica", " watched it": " viste", "Like": "Gosto", "Comments": "Comentários", "Share on my feed": "Partilhar no meu feed",
+  "Shared": "Partilhado", "Share": "Partilhar", "Liked by": "Gostam:", "Shared on your feed.": "Partilhado no teu feed.",
+  "This post can't be shared (private profile).": "Este post não pode ser partilhado (perfil privado).",
+  "Write a comment…": "Escreve um comentário…", "Post": "Publicar", "Delete comment": "Apagar comentário", "All": "Todas", "All platforms": "Todas as plataformas",
   "just now": "agora mesmo", "yesterday": "ontem", "PT": "PT", "English": "English", "Português": "Português",
 };
 
@@ -216,6 +219,10 @@ const P = [
   [/^Open (.+)'s profile$/, (m) => "Abrir o perfil de " + m[1]],
   [/^(\d+) recent titles?$/, (m) => m[1] + (m[1] === "1" ? " título recente" : " títulos recentes")],
   [/^Pinned on your profile: (.+)$/, (m) => "Destacado no teu perfil: " + m[1]],
+  ERR("Could not save the like", "Não foi possível guardar o gosto"),
+  ERR("Could not share", "Não foi possível partilhar"),
+  ERR("Could not load comments", "Não foi possível carregar os comentários"),
+  ERR("Could not post the comment", "Não foi possível publicar o comentário"),
   ERR("Could not send", "Não foi possível enviar"),
   ERR("Could not load messages", "Não foi possível carregar as mensagens"),
   [/^(\d+) seen$/, (m) => m[1] + " vistos"],

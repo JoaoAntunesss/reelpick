@@ -52,6 +52,42 @@ service cloud.firestore {
         allow read: if canView(uid);
         allow create, update: if isOwner(uid) && validSeen(request.resource.data);
         allow delete: if isOwner(uid);
+
+        // Likes on this post: one per person, the doc id is the person's uid.
+        match /likes/{liker} {
+          allow read: if canView(uid);
+          allow create: if isOwner(liker) && canView(uid)
+            && request.resource.data.keys().hasOnly(['at', 'name'])
+            && request.resource.data.at is number
+            && request.resource.data.name is string && request.resource.data.name.size() <= 40;
+          allow delete: if isOwner(liker);
+        }
+        // Comments on this post: written by anyone who can see it; the author or the post owner can delete.
+        match /comments/{cid} {
+          allow read: if canView(uid);
+          allow create: if signedIn() && canView(uid)
+            && request.resource.data.keys().hasOnly(['from', 'name', 'handle', 'text', 'at'])
+            && request.resource.data.from == request.auth.uid
+            && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 500
+            && request.resource.data.name is string && request.resource.data.name.size() <= 40
+            && request.resource.data.handle is string && request.resource.data.handle.size() <= 20
+            && request.resource.data.at is number;
+          allow delete: if signedIn() && (resource.data.from == request.auth.uid || isOwner(uid));
+        }
+      }
+
+      // Reposts: someone else's post shared on my feed (only if that person's profile is not private).
+      match /reposts/{rid} {
+        allow read: if canView(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['owner', 'ownerName', 'ownerHandle', 'item', 'at'])
+          && request.resource.data.owner is string && request.resource.data.owner != uid
+          && profileOf(request.resource.data.owner).visibility in ['friends', 'public']
+          && request.resource.data.ownerName is string && request.resource.data.ownerName.size() <= 40
+          && request.resource.data.ownerHandle is string && request.resource.data.ownerHandle.size() <= 20
+          && validSeen(request.resource.data.item)
+          && request.resource.data.at is number;
+        allow delete: if isOwner(uid);
       }
     }
 

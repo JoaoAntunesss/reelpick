@@ -341,3 +341,24 @@ button.sm{padding:5px 12px;font-size:13px;border-radius:999px}
   .navtabs a{padding:6px 10px}
 }
 @media (max-width:700px){.chatview.open .convo{background:var(--bg)}}
+
+/* post actions, comments, reposts */
+.rphead{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:13px;margin:-2px 0 8px 4px}.rphead b{color:var(--text);font-weight:600}
+.pacts{display:flex;gap:4px;margin-top:12px;padding-top:8px;border-top:1px solid var(--line)}
+.pact{display:flex;align-items:center;gap:6px;border:0;background:none;color:var(--muted);padding:6px 12px;border-radius:999px;font-size:14px}
+.pact i{font-style:normal;font-size:17px;transition:transform .2s}
+.pact:hover{background:#22163a;color:var(--text)}
+.pact.like.on{color:#ff5e9c}.pact.rp.on{color:#5dffa8}.pact.rp.on i{filter:hue-rotate(90deg) saturate(2)}
+.pact.dm{margin-left:auto}
+.pact.pop i{transform:scale(1.4)}
+.likers{margin:4px 12px 0;font-size:13px;color:var(--muted)}.likers b{color:var(--text);font-weight:600}
+.comments{margin-top:8px;padding:10px 12px;background:#0f0a1a;border-radius:14px}
+.cmt{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;padding:6px 0;border-bottom:1px solid #1f1534}
+.cname{border:0;background:none;padding:0;font-weight:700;color:var(--text)}
+.ctxt{flex:1 1 60%;white-space:pre-wrap;overflow-wrap:anywhere;color:#e6dcff}
+.cmt small{color:var(--muted);font-size:11px}
+.cdel{border:0;background:none;color:var(--muted);padding:0 4px;font-size:16px}
+.cform{display:flex;gap:8px;margin-top:8px}
+.cform input{flex:1;background:#150e24;border:1px solid var(--line);border-radius:999px;color:var(--text);padding:8px 14px;font:inherit}
+@media (prefers-reduced-motion:reduce){.pact i{transition:none}}
+#feedList,.fitem,.fbody>div{min-width:0;max-width:100%}.cform input{min-width:0}.pacts{flex-wrap:wrap}@media (max-width:420px){.pact{padding:6px 9px}}

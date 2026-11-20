@@ -82,12 +82,20 @@ export const pairId = (a, b) => (a < b ? a + "_" + b : b + "_" + a);
 /** Friends' feed: one list of everyone's watched titles, newest first. people = [{uid, name, handle, profile, items}]. */
 export function buildFeed(people, max = 40) {
   const out = [];
-  (people || []).forEach((p) => (p.items || []).forEach((raw) => {
-    const it = sanitizeItem(raw);
-    if (it && it.updatedAt > 0) out.push({ uid: p.uid, name: p.name || (p.handle ? "@" + p.handle : "A friend"), handle: p.handle || "", photo: p.profile && validPhoto(p.profile.photo) ? p.profile.photo : null, item: it });
-  }));
-  out.sort((a, b) => b.item.updatedAt - a.item.updatedAt);
-  return out.slice(0, max);
+  (people || []).forEach((p) => {
+    const name = p.name || (p.handle ? "@" + p.handle : "A friend"), photo = p.profile && validPhoto(p.profile.photo) ? p.profile.photo : null;
+    (p.items || []).forEach((raw) => {
+      const it = sanitizeItem(raw);
+      if (it && it.updatedAt > 0) out.push({ uid: p.uid, name, handle: p.handle || "", photo, item: it, at: it.updatedAt, by: null });
+    });
+    (p.reposts || []).forEach((r) => {
+      const it = sanitizeItem(r.item);
+      if (it && r.owner && r.at > 0) out.push({ uid: r.owner, name: r.ownerName || (r.ownerHandle ? "@" + r.ownerHandle : "A friend"), handle: r.ownerHandle || "", photo: null, item: it, at: r.at, by: { uid: p.uid, name } });
+    });
+  });
+  out.sort((a, b) => b.at - a.at);
+  const seenKeys = new Set();     // the same post shared by several people shows up once (newest first)
+  return out.filter((e) => { const k = e.uid + "|" + keyOf(e.item); if (seenKeys.has(k)) return false; seenKeys.add(k); return true; }).slice(0, max);
 }
 
 /** "just now", "5 min ago", "3 h ago", "2 days ago", then the date. */

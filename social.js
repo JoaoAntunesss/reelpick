@@ -248,39 +248,96 @@ export async function initSocial(ctx) {
       box.appendChild(c);
     }
   }
-  function paintFeedList(entries) {
+  let myReposts = new Set();
+  const postKey = (it) => it.type + ":" + it.id;
+  function paintFeedList(entries, noFriends) {
     const box = $("feedList"); box.replaceChildren();
-    if (!entries.length) { box.appendChild(emptyCard("Your friends have not logged anything yet. When they mark a title as seen, it shows up here.")); return; }
-    for (const e of entries) {
-      const a = el("article", "fitem"), it = e.item;
-      const who = el("button", "fwho"); who.type = "button"; who.onclick = () => openProfile(e.uid, { handle: e.handle });
-      who.appendChild(avatar(e.photo, e.name, "sm"));
-      const w = el("span"); w.appendChild(el("b", null, e.name)); w.appendChild(document.createTextNode(it.review ? " reviewed" : " watched")); who.appendChild(w);
-      who.appendChild(el("small", null, timeAgo(it.updatedAt)));
-      a.appendChild(who);
-      const body = el("div", "fbody");
-      if (it.poster) { const i = el("img"); i.src = it.poster; i.alt = ""; i.loading = "lazy"; body.appendChild(i); }
-      const d = el("div");
-      d.appendChild(el("h3", null, it.title + (it.year ? " (" + it.year + ")" : "")));
-      const meta = el("div", "fmeta"); meta.appendChild(el("span", "ftype", typeLabel(it.type)));
-      if (it.rating) meta.appendChild(el("span", "fstars", "★".repeat(it.rating) + "☆".repeat(5 - it.rating)));
-      d.appendChild(meta);
-      const rv = el("p", it.review ? "freview" : "freview none", it.review ? "“" + it.review + "”" : "No review, just watched."); if (it.review) rv.translate = false; d.appendChild(rv);
-      body.appendChild(d); a.appendChild(body);
-      const rep = el("button", "ghost sm freply", "💬 Reply"); rep.type = "button"; rep.onclick = () => openChat(e.uid, it); a.appendChild(rep);
-      box.appendChild(a);
+    if (noFriends) box.appendChild(emptyCard("Add friends in People to see what they are watching and what they thought of it.", "Find people", () => $("friendsBtn").click()));
+    if (!entries.length) { if (!noFriends) box.appendChild(emptyCard("Your friends have not logged anything yet. When they mark a title as seen, it shows up here.")); return; }
+    for (const e of entries) box.appendChild(postCard(e));
+  }
+  function postCard(e) {
+    const a = el("article", "fitem"), it = e.item, mine = e.uid === me.uid, key = postKey(it), rid = e.uid + "_" + key;
+    if (e.by) { const rp = el("div", "rphead"); rp.appendChild(el("span", null, "🔁")); rp.appendChild(el("b", null, e.by.uid === me.uid ? "You" : e.by.name)); rp.appendChild(el("span", null, e.by.uid === me.uid ? "shared it" : "shared")); a.appendChild(rp); }
+    const who = el("button", "fwho"); who.type = "button"; who.onclick = () => (mine ? openProfileDlg() : openProfile(e.uid, { handle: e.handle }));
+    const ph = e.photo || (mine && profile ? profile.photo : null) || (people.get(e.uid) || {}).photo;
+    who.appendChild(avatar(ph, e.name, "sm"));
+    const w = el("span"); w.appendChild(el("b", null, mine ? "You" : e.name)); w.appendChild(document.createTextNode(mine ? (it.review ? " wrote a review" : " watched it") : it.review ? " reviewed" : " watched")); who.appendChild(w);
+    who.appendChild(el("small", null, timeAgo(it.updatedAt)));
+    a.appendChild(who);
+    const body = el("div", "fbody");
+    if (it.poster) { const i = el("img"); i.src = it.poster; i.alt = ""; i.loading = "lazy"; body.appendChild(i); }
+    const d = el("div");
+    d.appendChild(el("h3", null, it.title + (it.year ? " (" + it.year + ")" : "")));
+    const meta = el("div", "fmeta"); meta.appendChild(el("span", "ftype", typeLabel(it.type)));
+    if (it.rating) meta.appendChild(el("span", "fstars", "★".repeat(it.rating) + "☆".repeat(5 - it.rating)));
+    d.appendChild(meta);
+    const rv = el("p", it.review ? "freview" : "freview none", it.review ? "“" + it.review + "”" : "No review, just watched."); if (it.review) rv.translate = false; d.appendChild(rv);
+    body.appendChild(d); a.appendChild(body);
+
+    // actions: like · comments · repost · send
+    const bar = el("div", "pacts"), st = { likes: 0, liked: false, comments: 0, likers: [] };
+    const like = el("button", "pact like"); like.type = "button"; like.title = "Like";
+    const com = el("button", "pact com"); com.type = "button"; com.title = "Comments";
+    const rp = el("button", "pact rp" + (myReposts.has(rid) ? " on" : "")); rp.type = "button"; rp.title = "Share on my feed";
+    const dm = el("button", "pact dm"); dm.type = "button"; dm.title = "Send to a friend";
+    const likers = el("p", "likers");
+    const paint = () => {
+      like.classList.toggle("on", st.liked); like.replaceChildren(el("i", null, st.liked ? "❤️" : "🤍"), el("span", null, st.likes ? String(st.likes) : ""));
+      com.replaceChildren(el("i", null, "💬"), el("span", null, st.comments ? String(st.comments) : ""));
+      rp.replaceChildren(el("i", null, "🔁"), el("span", null, rp.classList.contains("on") ? "Shared" : "Share"));
+      const names = st.likers.filter(Boolean); likers.hidden = !names.length; likers.replaceChildren();
+      if (names.length) { likers.appendChild(el("span", null, "Liked by")); const n = el("b", null, " " + names.slice(0, 3).join(", ") + (st.likes > 3 ? " +" + (st.likes - 3) : "")); n.translate = false; likers.appendChild(n); }
+    };
+    dm.replaceChildren(el("i", null, "✉️"));
+    paint();
+    like.onclick = async () => {
+      const on = !st.liked; st.liked = on; st.likes += on ? 1 : -1; const nm = profile.name || ""; st.likers = on ? [nm, ...st.likers] : st.likers.filter((x) => x !== nm); paint();
+      like.classList.add("pop"); setTimeout(() => like.classList.remove("pop"), 300);
+      try { await cloud.setLike(e.uid, key, on, profile.name); } catch (err) { st.liked = !on; st.likes += on ? -1 : 1; paint(); say("Could not save the like (" + (err.code || err.message) + ")."); }
+    };
+    rp.onclick = async () => {
+      const on = !rp.classList.contains("on"); rp.classList.toggle("on", on); paint();
+      try { await cloud.setRepost(e.uid, e.name, e.handle, it, on); if (on) { myReposts.add(rid); say("Shared on your feed."); } else myReposts.delete(rid); }
+      catch (err) { rp.classList.toggle("on", !on); paint(); say(err.code === "permission-denied" ? "This post can't be shared (private profile)." : "Could not share (" + (err.code || err.message) + ")."); }
+    };
+    dm.onclick = () => shareWith(it);
+    const box = el("div", "comments"); box.hidden = true;
+    com.onclick = () => { box.hidden = !box.hidden; if (!box.hidden) loadComments(); };
+    async function loadComments() {
+      box.replaceChildren(el("p", "hint", "Loading…"));
+      let list = []; try { list = await cloud.loadComments(e.uid, key); } catch (err) { box.replaceChildren(el("p", "hint", "Could not load comments (" + (err.code || err.message) + ").")); return; }
+      st.comments = list.length; paint(); box.replaceChildren();
+      for (const c of list) {
+        const r = el("div", "cmt");
+        const nm = el("button", "cname", c.from === me.uid ? "You" : c.name || "@" + c.handle); nm.type = "button"; nm.onclick = () => (c.from === me.uid ? openProfileDlg() : openProfile(c.from, { handle: c.handle }));
+        r.appendChild(nm);
+        const t = el("span", "ctxt", c.text); t.translate = false; r.appendChild(t);
+        r.appendChild(el("small", null, timeAgo(c.at)));
+        if (c.from === me.uid || mine) { const x = el("button", "cdel", "×"); x.type = "button"; x.title = "Delete comment"; x.onclick = async () => { try { await cloud.deleteComment(e.uid, key, c.id); loadComments(); } catch (err) { say("Could not delete (" + (err.code || err.message) + ")."); } }; r.appendChild(x); }
+        box.appendChild(r);
+      }
+      const f = el("form", "cform"); const inp = el("input"); inp.maxLength = 500; inp.placeholder = "Write a comment…"; inp.setAttribute("aria-label", "Write a comment…");
+      const send = el("button", "cta sm", "Post"); send.type = "submit"; f.append(inp, send);
+      f.onsubmit = async (ev) => { ev.preventDefault(); const v = inp.value.trim(); if (!v) return; send.disabled = true;
+        try { await cloud.addComment(e.uid, key, v, me_()); await loadComments(); } catch (err) { say("Could not post the comment (" + (err.code || err.message) + ")."); send.disabled = false; } };
+      box.appendChild(f);
+      if (!list.length) inp.focus();
     }
+    bar.append(like, com); if (!mine) bar.append(rp, dm);
+    a.append(bar, likers, box);
+    cloud.postStats(e.uid, key).then((x) => { Object.assign(st, x); paint(); }).catch(() => {});
+    return a;
   }
   async function loadFeed(force) {
     if (!me || feedBusy || (!force && Date.now() - feedAt < 60e3)) return;
-    const list = $("feedList"), strip = $("feedFriends");
-    if (!friends.length) { paintFeedFriends([]); list.replaceChildren(emptyCard("Add friends in People to see what they are watching and what they thought of it.", "Find people", () => $("friendsBtn").click())); return; }
+    const list = $("feedList");
     feedBusy = true;
     if (!list.children.length) list.replaceChildren(el("p", "hint", "Loading your friends' feed…"));
     try {
-      const people = await cloud.friendFeed(friends);
-      feedAt = Date.now();
-      paintFeedFriends(people); paintFeedList(buildFeed(people));
+      const [peopleList, rps] = await Promise.all([cloud.friendFeed([{ uid: me.uid, name: profile.name, handle: profile.handle }, ...friends]), cloud.myReposts().catch(() => [])]);
+      myReposts = new Set(rps); feedAt = Date.now();
+      paintFeedFriends(peopleList.filter((p) => p.uid !== me.uid)); paintFeedList(buildFeed(peopleList), !friends.length);
     } catch (e) { console.warn(e); list.replaceChildren(el("p", "hint", "Could not load the feed (" + (e.code || e.message) + ").")); }
     feedBusy = false;
   }
