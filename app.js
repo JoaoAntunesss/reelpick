@@ -3,6 +3,9 @@ import { DEMO, DEMO_GENRES } from "./demo.js";
 import { supported, createReel3D } from "./reel3d.js";
 import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES } from "./seen.js";
 import { initSocial } from "./social.js";
+import { startI18n, tmdbLang, isPT, setLang } from "./i18n.js";
+startI18n();
+{ const lb = document.getElementById("langBtn"); if (lb) { lb.textContent = isPT ? "English" : "Português"; lb.lang = isPT ? "en" : "pt-PT"; lb.title = isPT ? "Switch to English" : "Mudar para português"; lb.onclick = () => setLang(isPT ? "en" : "pt"); } }
 
 const $ = (id) => document.getElementById(id);
 const store = {
@@ -83,12 +86,12 @@ async function loadMeta() {
     providerList = [];
   } else {
     try {
-      const lang = "en-US";
+      const lang = tmdbLang;
       const [mg, tg] = await Promise.all([tmdb("/genre/movie/list", new URLSearchParams({ language: lang })), tmdb("/genre/tv/list", new URLSearchParams({ language: lang }))]);
       if (state.type === "movie") genreList = mg.genres.map((g) => ({ name: g.name, movie: g.id, tv: null }));
       else if (state.type === "tv") genreList = tg.genres.map((g) => ({ name: g.name, movie: null, tv: g.id }));
       else genreList = commonGenres(mg.genres, tg.genres);
-      const pr = new URLSearchParams({ watch_region: state.region, language: "en-US" });
+      const pr = new URLSearchParams({ watch_region: state.region, language: tmdbLang });
       const [pm, pt] = await Promise.all([tmdb("/watch/providers/movie", pr), tmdb("/watch/providers/tv", pr)]);
       const map = new Map();
       [...pm.results, ...pt.results].forEach((p) => { if (!map.has(p.provider_id)) map.set(p.provider_id, { id: p.provider_id, name: p.provider_name, logo: p.logo_path, prio: (p.display_priorities || {})[state.region] ?? 999 }); });
@@ -137,7 +140,7 @@ function initStatic() {
   soundLabel();
   $("spin").onclick = () => spin();
   $("seen").onclick = () => { if (current) markSeen(current); spin(); };
-  $("rRate").onclick = () => { if (!current) return; const k = markSeen(current); renderSeen(); $("seenClear").textContent = "Clear all"; $("seenDlg").showModal(); openEditor(k); };
+  $("rRate").onclick = () => { if (!current) return; const k = markSeen(current); renderSeen(); $("seenClear").textContent = "Clear all"; $("seenClear").dataset.armed = ""; $("seenDlg").showModal(); openEditor(k); };
   for (let i = 1; i <= 5; i++) { const b = el("button", null, "★"); b.type = "button"; b.setAttribute("aria-label", i + " star" + (i > 1 ? "s" : "")); b.onclick = () => paintStars(Number($("seenEdit").dataset.rating) === i ? 0 : i); $("eStars").appendChild(b); }
   $("eSave").onclick = () => {
     const it = seen.get(editing); if (!it) return; const r = Number($("seenEdit").dataset.rating) || null;
@@ -146,8 +149,8 @@ function initStatic() {
   $("eClose").onclick = () => { $("seenEdit").hidden = true; editing = null; };
   $("ePin").onclick = async () => { const it = seen.get(editing); if (it) await social.pin(it, $("ePinText").value.trim()); };
   saveSeen();
-  $("seenBtn").onclick = () => { renderSeen(); $("seenClear").textContent = "Clear all"; $("seenDlg").showModal(); };
-  $("seenClear").onclick = () => { if ($("seenClear").textContent === "Clear all") { $("seenClear").textContent = "Click again to confirm"; return; } seen.clear(); saveSeen(); renderSeen(); $("seenClear").textContent = "Clear all"; };
+  $("seenBtn").onclick = () => { renderSeen(); $("seenClear").textContent = "Clear all"; $("seenClear").dataset.armed = ""; $("seenDlg").showModal(); };
+  $("seenClear").onclick = () => { const b = $("seenClear"); if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Click again to confirm"; return; } b.dataset.armed = ""; seen.clear(); saveSeen(); renderSeen(); $("seenClear").textContent = "Clear all"; $("seenClear").dataset.armed = ""; };
   $("seenExport").onclick = () => {
     const url = URL.createObjectURL(new Blob([JSON.stringify([...seen.values()], null, 1)], { type: "application/json" }));
     const a = el("a"); a.href = url; a.download = "reelpick-seen.json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -176,7 +179,7 @@ const soundLabel = () => { $("sound").textContent = "Sound: " + (state.sound ? "
 // ------------------------------------------------------------------ candidates
 const selectedGenres = (type) => genreList.filter((g) => state.genres.has(g.name)).map((g) => g[type]).filter((x) => x != null);
 const filterState = () => ({ genres: { movie: selectedGenres("movie"), tv: selectedGenres("tv") }, matchAll: state.matchAll,
-  providers: [...state.providers], region: state.region, style: state.style, minRating: state.minRating, language: "en-US" });
+  providers: [...state.providers], region: state.region, style: state.style, minRating: state.minRating, language: tmdbLang });
 
 async function candidates() {
   const type = types()[randInt(types().length)];
@@ -278,8 +281,10 @@ async function showResult(it) {
   let info = { ...it }, provs = [];
   if (!demo) {
     try {
-      const d = await tmdb(`/${it.type}/${it.id}`, new URLSearchParams({ language: "en-US", append_to_response: "watch/providers" }));
-      info.overview = d.overview || info.overview; info.genres = (d.genres || []).map((g) => g.name);
+      const d = await tmdb(`/${it.type}/${it.id}`, new URLSearchParams({ language: tmdbLang, append_to_response: "watch/providers" }));
+      info.overview = d.overview || info.overview;
+      if (!info.overview && isPT) { try { info.overview = (await tmdb(`/${it.type}/${it.id}`, new URLSearchParams({ language: "en-US" }))).overview || ""; } catch (e) { /* none */ } }
+      info.genres = (d.genres || []).map((g) => g.name);
       info.runtime = d.runtime || (d.episode_run_time || [])[0]; info.seasons = d.number_of_seasons;
       const reg = ((d["watch/providers"] || {}).results || {})[state.region];
       provs = (reg && reg.flatrate) || [];
@@ -340,7 +345,7 @@ async function pickDaily(rng) {
     if (!list.length) list = DEMO.filter((x) => x.genres.some((g) => tastes.genres.includes(g))).map((x) => ({ ...x, poster: null }));
   } else {
     const ids = await genreIdsFor(type);
-    const q = buildParams(type, { genres: { movie: type === "movie" ? ids : [], tv: type === "tv" ? ids : [] }, matchAll: false, providers: [], style: "any", minRating: 6.5, language: "en-US" });
+    const q = buildParams(type, { genres: { movie: type === "movie" ? ids : [], tv: type === "tv" ? ids : [] }, matchAll: false, providers: [], style: "any", minRating: 6.5, language: tmdbLang });
     q.set("vote_count.gte", type === "movie" ? "1000" : "300");
     const page = 1 + Math.floor(rng() * 8);
     let data = await tmdb("/discover/" + type, new URLSearchParams([...q, ["page", String(page)]]));
