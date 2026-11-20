@@ -1,7 +1,7 @@
 // Firebase wrapper (Auth with Google + Firestore). Loaded only when firebase-config.js has a config.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser, reauthenticateWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, query, where, documentId, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, query, where, documentId, limit, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { sanitizeItem, keyOf, sanitizeProfile, pairId } from "./seen.js";
 
 export async function init(config) {
@@ -58,6 +58,17 @@ export async function init(config) {
       let s;
       try { s = await getDocs(seenCol(uid)); } catch (e) { throw Object.assign(new Error("private"), { code: "private" }); }
       return { profile: fromDoc(p), items: s.docs.map((d) => d.data()) };
+    },
+    /** Friends' feed: each friend's latest watched titles (newest first) plus their profile card. Friends whose list I may not read are skipped. */
+    async friendFeed(friendList, per = 8) {
+      const one = async (f) => {
+        try {
+          const [p, s] = await Promise.all([getDoc(userDoc(f.uid)).catch(() => null), getDocs(query(seenCol(f.uid), orderBy("updatedAt", "desc"), limit(per)))]);
+          const prof = p ? fromDoc(p) : null;
+          return { uid: f.uid, profile: prof, name: (prof && prof.name) || f.name || "", handle: (prof && prof.handle) || f.handle || "", items: s.docs.map((d) => sanitizeItem(d.data())).filter(Boolean) };
+        } catch (e) { return { uid: f.uid, profile: null, name: f.name || "", handle: f.handle || "", items: [], hidden: true }; }
+      };
+      return Promise.all(friendList.slice(0, 40).map(one));
     },
     async loadSocial() {
       const uid = me(), f = collection(db, "friendships"), r = collection(db, "requests");

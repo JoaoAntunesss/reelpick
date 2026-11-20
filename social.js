@@ -1,5 +1,5 @@
 // Accounts, nicknames, friend requests, profiles and comparison. Does nothing unless firebase-config.js has a config.
-import { sanitizeItem, mergeSeen, compareLists, normalizeHandle, sanitizePinned, validPhoto, sanitizeProfile } from "./seen.js";
+import { sanitizeItem, mergeSeen, compareLists, normalizeHandle, sanitizePinned, validPhoto, sanitizeProfile, buildFeed, timeAgo } from "./seen.js";
 
 const stars = (n) => (n ? "★".repeat(n) + "☆".repeat(5 - n) : "not rated");
 
@@ -38,6 +38,7 @@ export async function initSocial(ctx) {
     $("signIn").hidden = !!me; $("who").hidden = !me; $("friendsBtn").hidden = !me; $("profileBtn").hidden = !me; $("signOut").hidden = !me;
     if (me && profile) $("who").textContent = profile.name + (profile.handle ? "  @" + profile.handle : "");
     $("ePinBox").hidden = !me;
+    $("feed").hidden = !me;
     $("reqBadge").hidden = !incoming.length; $("reqBadge").textContent = incoming.length;
     if (me) $("friendsBtn").title = incoming.length ? incoming.length + " pending friend request(s)" : "People";
   }
@@ -62,11 +63,11 @@ export async function initSocial(ctx) {
     if (user) {
       wasIn = true;
       try { await syncDown(user); } catch (e) { console.warn(e); say("Signed in, but the cloud could not be read (" + (e.code || e.message) + "). Check the Firestore rules."); }
-      paintAccount();
+      paintAccount(); loadFeed(true);
       const nick = normalizeHandle(new URLSearchParams(location.search).get("p"));
       if (nick && profile) { history.replaceState(null, "", location.pathname); const uid = await guard(cloud.findHandle(nick)); if (uid) openProfile(uid, { handle: nick }); else say("Nobody uses the nickname @" + nick + "."); }
     } else {
-      profile = null; friends = []; incoming = []; outgoing = [];
+      profile = null; friends = []; incoming = []; outgoing = []; $("feedFriends").replaceChildren(); $("feedList").replaceChildren(); feedAt = 0;
       if (wasIn && !keepLocal) { seen.clear(); saveSeen(); renderSeen(); }   // the list stays in the account
       wasIn = false; keepLocal = false; paintAccount();
       const nick = normalizeHandle(new URLSearchParams(location.search).get("p"));
@@ -108,7 +109,7 @@ export async function initSocial(ctx) {
     (opts.actions || []).forEach(([label, fn, ghost]) => { const b = el("button", ghost ? "ghost" : null, label); b.type = "button"; b.onclick = fn; r.appendChild(b); });
     return r;
   }
-  async function act(fn) { await guard(fn()); await guard(refreshSocial()); paintPeople(); }
+  async function act(fn) { await guard(fn()); await guard(refreshSocial()); paintPeople(); loadFeed(true); }
   const sendReq = (uid, handle) => act(() => cloud.sendRequest(uid, handle, profile.name, profile.handle || ""));
   const accept = (req) => act(() => cloud.acceptRequest(req, me_()));
   const cancelReq = (from, to) => act(() => cloud.cancelRequest(from, to));
@@ -223,8 +224,62 @@ export async function initSocial(ctx) {
   $("fAdd").onclick = runSearch;
   $("fNick").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); runSearch(); } });
 
-  cloud.onAuth(onAuth);
   paintAccount();
+
+  // ---------------------------------------------------------------- friends' feed
+  let feedBusy = false, feedAt = 0;
+  const typeLabel = (t) => (t === "tv" ? "Series" : "Movie");
+  function paintFeedFriends(people) {
+    const box = $("feedFriends"); box.replaceChildren();
+    for (const p of people) {
+      const name = p.name || (p.handle ? "@" + p.handle : "Friend");
+      const c = el("button", "fcard"); c.type = "button"; c.title = "Open " + name + "'s profile";
+      c.appendChild(avatar(p.profile && p.profile.photo, name));
+      c.appendChild(el("b", null, name));
+      if (p.handle) c.appendChild(el("small", null, "@" + p.handle));
+      c.appendChild(el("p", null, p.hidden ? "Private profile" : (p.profile && p.profile.bio) || (p.items.length ? p.items.length + " recent title" + (p.items.length > 1 ? "s" : "") : "Nothing logged yet")));
+      c.onclick = () => openProfile(p.uid, { handle: p.handle });
+      box.appendChild(c);
+    }
+  }
+  function paintFeedList(entries) {
+    const box = $("feedList"); box.replaceChildren();
+    if (!entries.length) { box.appendChild(el("p", "hint", "Your friends have not logged anything yet. When they mark a title as seen, it shows up here.")); return; }
+    for (const e of entries) {
+      const a = el("article", "fitem"), it = e.item;
+      const who = el("button", "fwho"); who.type = "button"; who.onclick = () => openProfile(e.uid, { handle: e.handle });
+      who.appendChild(avatar(e.photo, e.name, "sm"));
+      const w = el("span"); w.appendChild(el("b", null, e.name)); w.appendChild(document.createTextNode(it.review ? " reviewed" : " watched")); who.appendChild(w);
+      who.appendChild(el("small", null, timeAgo(it.updatedAt)));
+      a.appendChild(who);
+      const body = el("div", "fbody");
+      if (it.poster) { const i = el("img"); i.src = it.poster; i.alt = ""; i.loading = "lazy"; body.appendChild(i); }
+      const d = el("div");
+      d.appendChild(el("h3", null, it.title + (it.year ? " (" + it.year + ")" : "")));
+      const meta = el("div", "fmeta"); meta.appendChild(el("span", "ftype", typeLabel(it.type)));
+      if (it.rating) meta.appendChild(el("span", "fstars", "★".repeat(it.rating) + "☆".repeat(5 - it.rating)));
+      d.appendChild(meta);
+      d.appendChild(el("p", it.review ? "freview" : "freview none", it.review ? "“" + it.review + "”" : "No review, just watched."));
+      body.appendChild(d); a.appendChild(body);
+      box.appendChild(a);
+    }
+  }
+  async function loadFeed(force) {
+    if (!me || feedBusy || (!force && Date.now() - feedAt < 60e3)) return;
+    const list = $("feedList"), strip = $("feedFriends");
+    if (!friends.length) { strip.replaceChildren(); list.replaceChildren(el("p", "hint", "Add friends in People to see what they are watching and what they thought of it.")); return; }
+    feedBusy = true;
+    if (!list.children.length) list.replaceChildren(el("p", "hint", "Loading your friends' feed…"));
+    try {
+      const people = await cloud.friendFeed(friends);
+      feedAt = Date.now();
+      paintFeedFriends(people); paintFeedList(buildFeed(people));
+    } catch (e) { console.warn(e); list.replaceChildren(el("p", "hint", "Could not load the feed (" + (e.code || e.message) + ").")); }
+    feedBusy = false;
+  }
+  $("feedRefresh").onclick = () => loadFeed(true);
+  cloud.onAuth(onAuth);
+
   return {
     enabled: true, signedIn: () => !!me,
     upsert: (item) => { if (me) guard(cloud.saveItem(item)); },

@@ -78,3 +78,25 @@ export function sanitizeProfile(p) {
 }
 /** Same id on both sides of a friendship. */
 export const pairId = (a, b) => (a < b ? a + "_" + b : b + "_" + a);
+
+/** Friends' feed: one list of everyone's watched titles, newest first. people = [{uid, name, handle, profile, items}]. */
+export function buildFeed(people, max = 40) {
+  const out = [];
+  (people || []).forEach((p) => (p.items || []).forEach((raw) => {
+    const it = sanitizeItem(raw);
+    if (it && it.updatedAt > 0) out.push({ uid: p.uid, name: p.name || (p.handle ? "@" + p.handle : "A friend"), handle: p.handle || "", photo: p.profile && validPhoto(p.profile.photo) ? p.profile.photo : null, item: it });
+  }));
+  out.sort((a, b) => b.item.updatedAt - a.item.updatedAt);
+  return out.slice(0, max);
+}
+
+/** "just now", "5 min ago", "3 h ago", "2 days ago", then the date. */
+export function timeAgo(ts, now = Date.now()) {
+  const s = Math.max(0, (now - ts) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.floor(s / 60) + " min ago";
+  if (s < 86400) return Math.floor(s / 3600) + " h ago";
+  const d = Math.floor(s / 86400);
+  if (d < 7) return d === 1 ? "yesterday" : d + " days ago";
+  return new Date(ts).toLocaleDateString(undefined, { day: "numeric", month: "short", year: new Date(ts).getFullYear() === new Date(now).getFullYear() ? undefined : "numeric" });
+}

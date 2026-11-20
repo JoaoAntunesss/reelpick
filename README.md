@@ -61,5 +61,6 @@ Without setup, ReelPick works locally (your seen list lives in your browser). To
 Notes
 - Profiles are **friends-only by default**; each person can choose private, friends or public. Only nickname-based discovery is public; friends are made through requests that the other person accepts.
 - Profile photos are resized to 160×160 and stored inside the profile (Firebase Storage needs a paid plan, so it is not used).
+- **Friends' feed**: once signed in, the page shows your friends (photo, nickname and bio) and what they watched lately, newest first, with their rating and a short piece of their review. It reads the same data as their profile, so it follows each friend's visibility setting.
 - On first sign-in you choose your tastes; the **Pick of the day** is a daily suggestion (one per day, "Another pick" to reroll) based on them.
 - Free-tier quotas are generous for personal use, but this was tested only with mocks: review `firestore.rules` before going public.

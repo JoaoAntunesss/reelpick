@@ -166,3 +166,30 @@ aside,.potd,.result,.howto{backdrop-filter:blur(6px)}
 .potd{transition:box-shadow .2s}.potd:hover{box-shadow:0 0 44px #ffc83d33}
 .potdbody img{transition:transform .2s}.potdbody img:hover{transform:scale(1.05) rotate(-1deg)}
 @media (prefers-reduced-motion:reduce){.keytop{animation:none}}
+/* friends' feed */
+.feed{max-width:1200px;margin:10px auto;padding:18px 20px;background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--line);border-radius:16px}
+.feed[hidden]{display:none}
+.feedtop{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.feedtop h2{margin:0;font-size:15px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold)}
+.ffriends{display:flex;gap:12px;overflow-x:auto;padding:2px 2px 12px;scroll-snap-type:x proximity}
+.ffriends:empty{display:none}
+.fcard{flex:none;width:150px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 10px;text-align:center;border-radius:14px;background:#1a1130;scroll-snap-align:start}
+.fcard:hover{border-color:var(--neon)}
+.fcard b{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fcard small{color:var(--muted);font-size:12px}
+.fcard p{margin:4px 0 0;font-size:12px;color:#d9d0f0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.6em}
+.fitems{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+.fitems>.hint{grid-column:1/-1;margin:6px 0}
+.fitem{padding:12px;border:1px solid var(--line);border-radius:14px;background:#130c22}
+.fwho{display:flex;align-items:center;gap:10px;width:100%;padding:0 0 10px;border:0;background:none;text-align:left}
+.fwho span{flex:1;min-width:0;color:var(--muted)}.fwho span b{color:var(--text)}
+.fwho small{color:var(--muted);font-size:12px;flex:none}
+.fbody{display:flex;gap:12px;align-items:flex-start}
+.fbody img{width:72px;height:108px;object-fit:cover;border-radius:8px;flex:none;background:#1a1130}
+.fbody h3{margin:0 0 4px;font-size:16px}
+.fmeta{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.ftype{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--cyan);border:1px solid #38e8ff55;border-radius:99px;padding:1px 8px}
+.fstars{color:var(--gold);letter-spacing:1px}
+.freview{margin:0;color:#d9d0f0;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.freview.none{color:var(--muted);font-style:italic}
+@media (max-width:520px){.fitems{grid-template-columns:1fr}.feed{padding:14px}}
