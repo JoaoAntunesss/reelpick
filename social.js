@@ -1,8 +1,8 @@
 // Accounts, nicknames, friend requests, profiles and comparison. Does nothing unless firebase-config.js has a config.
-import { isPT } from "./i18n.js?v=1795197276";
-import { icon } from "./icons.js?v=1795197276";
-import { starsText } from "./seen.js?v=1795197276";
-import { sanitizeItem, mergeSeen, compareLists, normalizeHandle, sanitizePinned, validPhoto, sanitizeProfile, buildFeed, timeAgo } from "./seen.js?v=1795197276";
+import { isPT } from "./i18n.js?v=1795533197";
+import { icon } from "./icons.js?v=1795533197";
+import { starsText } from "./seen.js?v=1795533197";
+import { sanitizeItem, mergeSeen, compareLists, normalizeHandle, sanitizePinned, validPhoto, sanitizeProfile, buildFeed, timeAgo } from "./seen.js?v=1795533197";
 
 const stars = (n) => (n ? starsText(n) : "not rated");
 
@@ -30,10 +30,10 @@ export async function initSocial(ctx) {
   const hasTastes = (t) => t && t.genres && t.genres.length;
   const off = { enabled: false, signedIn: () => false, upsert() {}, remove() {}, pushMany() {}, pin: async () => {} };
   let cfg = null;
-  try { cfg = (await import("./firebase-config.js?v=1795197276")).firebaseConfig; } catch (e) { /* no config file */ }
+  try { cfg = (await import("./firebase-config.js?v=1795533197")).firebaseConfig; } catch (e) { /* no config file */ }
   if (!cfg) return off;
   let cloud;
-  try { cloud = await (await import("./cloud.js?v=1795197276")).init(cfg); } catch (e) { console.warn("Cloud unavailable:", e); return off; }
+  try { cloud = await (await import("./cloud.js?v=1795533197")).init(cfg); } catch (e) { console.warn("Cloud unavailable:", e); return off; }
 
   let blocked = new Map();   // uid -> {name, handle}
   const isBlocked = (uid) => blocked.has(uid);

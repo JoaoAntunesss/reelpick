@@ -1,11 +1,11 @@
-import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle, tasteGenreIds, hashStr, mulberry32, dayKey } from "./query.js?v=1795197276";
-import { DEMO, DEMO_GENRES } from "./demo.js?v=1795197276";
-import { supported, createReel3D } from "./reel3d.js?v=1795197276";
-import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES, starsText } from "./seen.js?v=1795197276";
-import { initSocial } from "./social.js?v=1795197276";
-import { startI18n, tmdbLang, isPT, setLang } from "./i18n.js?v=1795197276";
-import { icon } from "./icons.js?v=1795197276";
-import { FILMS, PLAIN, validPath, cacheKey } from "./themes.js?v=1795197276";
+import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle, tasteGenreIds, hashStr, mulberry32, dayKey } from "./query.js?v=1795533197";
+import { DEMO, DEMO_GENRES } from "./demo.js?v=1795533197";
+import { supported, createReel3D } from "./reel3d.js?v=1795533197";
+import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES, starsText } from "./seen.js?v=1795533197";
+import { initSocial } from "./social.js?v=1795533197";
+import { startI18n, tmdbLang, isPT, setLang } from "./i18n.js?v=1795533197";
+import { icon } from "./icons.js?v=1795533197";
+import { FILMS, PLAIN, validPath, cacheKey } from "./themes.js?v=1795533197";
 startI18n();
 { const lb = document.getElementById("langBtn"); if (lb) { lb.textContent = isPT ? "English" : "Português"; lb.lang = isPT ? "en" : "pt-PT"; lb.title = isPT ? "Switch to English" : "Mudar para português"; lb.onclick = () => setLang(isPT ? "en" : "pt"); } }
 
@@ -99,7 +99,23 @@ const norm = (x, type) => ({
   id: x.id, type, title: x.title || x.name || "Untitled",
   year: ((x.release_date || x.first_air_date || "") + "").slice(0, 4), rating: x.vote_average || 0, votes: x.vote_count || 0,
   overview: x.overview || "", poster: x.poster_path ? IMG + "w342" + x.poster_path : null, genreIds: x.genre_ids || [],
+  orig: x.original_title || x.original_name || "",
 });
+// «Ver no AWplayer»: abre o AWplayer (player.awdigital.pt), que procura o título nas listas da própria pessoa (só filmes e séries)
+const AWPLAYER = "https://player.awdigital.pt/";
+function awLink(it) {
+  if (!it || (it.type !== "movie" && it.type !== "tv")) return "";
+  const q = new URLSearchParams({ ver: it.type, t: it.title || "" });
+  if (it.orig && it.orig !== it.title) q.set("o", it.orig);
+  if (/^(19|20)\d\d$/.test(it.year || "")) q.set("y", it.year);
+  return AWPLAYER + "?" + q.toString();
+}
+function awButton(it, cls) {
+  const href = awLink(it); if (!href) return null;
+  const a = el("a", cls || "btn ghostbtn"); a.appendChild(icon("play", 16)); a.appendChild(el("span", null, "Watch in AWplayer"));
+  a.href = href; a.target = "_blank"; a.rel = "noopener"; a.title = "Opens AWplayer and looks for this title in your own playlists";
+  return a;
+}
 
 // ------------------------------------------------------------------ filters UI
 function types() { return state.type === "both" ? ["movie", "tv"] : [state.type]; }
@@ -330,6 +346,7 @@ async function showResult(it) {
       if (!info.overview && isPT) { try { info.overview = (await tmdb(`/${it.type}/${it.id}`, new URLSearchParams({ language: "en-US" }))).overview || ""; } catch (e) { /* none */ } }
       info.genres = (d.genres || []).map((g) => g.name);
       info.runtime = d.runtime || (d.episode_run_time || [])[0]; info.seasons = d.number_of_seasons;
+      info.orig = d.original_title || d.original_name || info.orig || "";
       const reg = ((d["watch/providers"] || {}).results || {})[state.region];
       provs = (reg && reg.flatrate) || [];
     } catch (e) { /* keep basic info */ }
@@ -347,6 +364,7 @@ async function showResult(it) {
     pv.appendChild(el("small", null, "included in " + REGIONS[state.region] + " (via JustWatch)"));
   } else if (!demo) pv.appendChild(el("small", null, "Not on a subscription platform in " + REGIONS[state.region] + " right now."));
   $("rTrailer").href = "https://www.youtube.com/results?search_query=" + encodeURIComponent(info.title + " " + info.year + " trailer");
+  $("rAw").href = awLink(info); $("rAw").hidden = !$("rAw").href;
   $("rSend").hidden = !social.signedIn(); $("rWant").hidden = !social.signedIn() || !social.isWanted; $("rMore").href = "#t/" + it.type + "/" + it.id; paintWant($("rWant"), it);
   $("result").hidden = false; $("result").classList.remove("flip"); void $("result").offsetWidth; $("result").classList.add("flip");
   $("result").scrollIntoView({ block: "nearest", behavior: reduced() ? "auto" : "smooth" });
@@ -427,7 +445,8 @@ async function dailyPick(force) {
   const sn = el("button", "ghost", "Seen it"); sn.type = "button"; sn.onclick = () => { markSeen(item); store.set("rp_potd_n_" + day, String(n + 1)); dailyPick(true); };
   const an = el("button", "ghost", "Another pick"); an.type = "button"; an.onclick = () => { store.set("rp_potd_n_" + day, String(n + 1)); dailyPick(true); };
   const tb = el("button", "ghost", "My tastes"); tb.type = "button"; tb.onclick = openTastes;
-  row.append(tr, sn, an, tb); d.appendChild(row); box.appendChild(d);
+  const aw = awButton(item, "btn ghostbtn");
+  row.append(tr, ...(aw ? [aw] : []), sn, an, tb); d.appendChild(row); box.appendChild(d);
 }
 
 // ------------------------------------------------------------------ sections (feed / choose / top)
@@ -528,6 +547,7 @@ async function renderTitle(type, id) {
   const tr = d && d.videos && d.videos.results.find((v) => v.site === "YouTube" && v.type === "Trailer");
   const ta = el("a", "btn ghostbtn"); ta.appendChild(icon("play", 16)); ta.appendChild(el("span", null, "Trailer")); ta.target = "_blank"; ta.rel = "noopener noreferrer";
   ta.href = tr ? "https://www.youtube.com/watch?v=" + encodeURIComponent(tr.key) : "https://www.youtube.com/results?search_query=" + encodeURIComponent(item.title + " " + item.year + " trailer"); acts.appendChild(ta);
+  { const aw = awButton({ ...item, orig: (d && (d.original_title || d.original_name)) || item.orig }); if (aw) acts.appendChild(aw); }
   if (social.shareWith && social.signedIn()) mk("Send to a friend", "ghost", () => social.shareWith(item), "send");
   if (social.titleFriends) social.titleFriends(item); else $("tFriends").replaceChildren();
 }

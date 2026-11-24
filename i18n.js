@@ -30,7 +30,7 @@ const T = {
   "Your platforms": "As tuas plataformas", "(none = anywhere)": "(nenhuma = qualquer uma)", "Country": "País", "Style": "Estilo",
   "Minimum rating:": "Classificação mínima:", "any": "qualquer",
   "Slot machine": "Slot machine", "Pick of the day": "Sugestão do dia", "PICK OF THE DAY": "SUGESTÃO DO DIA", "SPIN": "RODAR",
-  "Watch trailer": "Ver trailer", "I've watched it — rate": "Já vi — avaliar", "Seen it — spin again": "Já vi — rodar outra vez",
+  "Watch trailer": "Ver trailer", "Watch in AWplayer": "Ver no AWplayer", "Opens AWplayer and looks for this title in your own playlists": "Abre o AWplayer e procura este título nas tuas listas", "I've watched it — rate": "Já vi — avaliar", "Seen it — spin again": "Já vi — rodar outra vez",
   "Friends' feed": "Feed dos amigos", "Refresh": "Atualizar", "Your friends": "Os teus amigos",
   // styles & countries
   "Anything": "Qualquer coisa", "Crowd pleasers": "Agradam a todos", "Hidden gems": "Pérolas escondidas",
