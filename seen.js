@@ -15,8 +15,19 @@ export function sanitizeItem(x) {
     rating: Number.isFinite(r) && r >= 0.5 && r <= 5 && Number.isInteger(r * 2) ? r : null,
     review: str(x.review, 600), updatedAt: Number.isFinite(Number(x.updatedAt)) ? Number(x.updatedAt) : 0,
     ...(x.spoiler === true ? { spoiler: true } : {}),
+    ...(Number.isFinite(Number(x.firstAt)) && Number(x.firstAt) > 0 ? { firstAt: Number(x.firstAt) } : {}),
+    ...(x.type === "tv" && sanitizeSeasons(x.seasons) ? { seasons: sanitizeSeasons(x.seasons) } : {}),
   };
 }
+/** Series: rating per season, {"1": 4, "2": 3.5}. Up to 40 seasons. Returns null when empty. */
+export function sanitizeSeasons(m) {
+  if (!m || typeof m !== "object" || Array.isArray(m)) return null;
+  const o = {};
+  Object.keys(m).filter((k) => /^\d{1,2}$/.test(k) && Number(k) > 0).slice(0, 40).forEach((k) => { const r = Number(m[k]); if (Number.isFinite(r) && r >= 0.5 && r <= 5 && Number.isInteger(r * 2)) o[String(Number(k))] = r; });
+  return Object.keys(o).length ? o : null;
+}
+/** When a title was first logged (falls back to the last change for older entries). */
+export const watchedAt = (it) => (it && (it.firstAt || it.updatedAt)) || 0;
 
 /** Newest copy wins. Returns the merged Map and the items the cloud still needs. */
 export function mergeSeen(local, cloudItems) {
@@ -90,7 +101,7 @@ export function sanitizeProfile(p) {
 export const pairId = (a, b) => (a < b ? a + "_" + b : b + "_" + a);
 
 /** Friends' feed: one list of everyone's watched titles, newest first. people = [{uid, name, handle, profile, items}]. */
-export function buildFeed(people, max = 40) {
+export function buildFeed(people, max = 400) {
   const out = [];
   (people || []).forEach((p) => {
     const name = p.name || (p.handle ? "@" + p.handle : "A friend"), photo = p.profile && validPhoto(p.profile.photo) ? p.profile.photo : null;

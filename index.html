@@ -16,7 +16,7 @@
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=1795533197">
+<link rel="stylesheet" href="style.css?v=1795619163">
 </head>
 <body>
 <div id="bg" aria-hidden="true"></div>
@@ -25,6 +25,7 @@
   <nav class="navtabs" aria-label="Sections">
     <a href="#feed" data-tab="feed"><i aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h5v-6h4v6h5V9.5"/></svg></i><span>Feed</span></a>
     <a href="#pick" data-tab="pick"><i aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></svg></i><span>Choose</span></a>
+    <a href="#news" data-tab="news"><i aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M17 9h3v8a2 2 0 0 1-2 2"/><path d="M8 9h5M8 13h5M8 16h3"/></svg></i><span>News</span></a>
     <a href="#chat" data-tab="chat"><i aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></i><span>Messages</span><b id="chatBadge" class="badge" hidden></b></a>
     <a href="#top" data-tab="top"><i aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg></i><span>Top</span></a>
   </nav>
@@ -56,6 +57,7 @@
         <h2>People you may know</h2>
         <div id="suggestList" class="sugg"></div>
       </section>
+      <div id="recapBanner" class="card recapban" hidden></div>
       <div class="feedtop">
         <h2 id="feedH">Friends' feed</h2>
         <button type="button" id="feedRefresh" class="ghost sm">Refresh</button>
@@ -193,6 +195,11 @@
   <section class="card convo-empty" id="convoEmpty"><p class="bigic"><svg class="ic" viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></p><p class="hint">Choose a friend to talk about movies and series.</p></section>
 </div>
 
+<div id="v-news" class="view newsview" data-view="news" hidden>
+  <div class="feedtop ntop"><h1>News</h1><button type="button" id="newsRefresh" class="ghost sm">Refresh</button></div>
+  <div id="newsBody"></div>
+</div>
+
 <div id="v-profile" class="view profview" data-view="profile" hidden>
   <section class="card prof">
     <div class="prof-top">
@@ -209,7 +216,7 @@
     <div id="prPinned"></div>
   </section>
   <nav id="prTabs" class="ptabs" aria-label="Profile sections">
-    <button type="button" data-t="posts">Posts</button><button type="button" data-t="reviews">Reviews</button><button type="button" data-t="seen">Watched</button><button type="button" data-t="want">Watchlist</button><button type="button" data-t="common">In common</button>
+    <button type="button" data-t="posts">Posts</button><button type="button" data-t="reviews">Reviews</button><button type="button" data-t="seen">Watched</button><button type="button" data-t="want">Watchlist</button><button type="button" data-t="lists">Lists</button><button type="button" data-t="stats">Stats</button><button type="button" data-t="common">In common</button>
   </nav>
   <section id="prBody" class="prbody"></section>
 </div>
@@ -248,7 +255,7 @@
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <footer>
   <p>This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data provided by JustWatch via TMDB.</p>
-  <p><button id="keyBtn" class="link">TMDB key…</button> · <button id="seenBtn" class="link">My seen list (0)</button> · <button id="langBtn" class="link" type="button">Português</button>· <button id="themeBtn" class="link" type="button">Background</button> <span id="installWrap" hidden> · <button id="installBtn" class="link" type="button">Install app</button></span></p>
+  <p><button id="keyBtn" class="link">TMDB key…</button> · <button id="seenBtn" class="link">My seen list (0)</button> · <button id="langBtn" class="link" type="button">Português</button>· <button id="themeBtn" class="link" type="button">Appearance</button> <span id="installWrap" hidden> · <button id="installBtn" class="link" type="button">Install app</button></span></p>
 </footer>
 
 <dialog id="seenDlg" class="wide">
@@ -270,6 +277,7 @@
     <div class="row">
       <button type="button" id="seenExport">Export</button>
       <button type="button" id="seenImport">Import</button>
+      <button type="button" id="seenLb">Import from Letterboxd</button>
       <input type="file" id="seenFile" accept="application/json" hidden>
       <button type="button" id="seenClear" class="ghost">Clear all</button>
       <button value="close" class="ghost">Close</button>
@@ -401,6 +409,7 @@
       <p class="hint">Tap a star once for a full star, twice for half a star.</p>
       <label>Your review <textarea id="logReview" maxlength="600" rows="4" placeholder="What did you think? (optional)"></textarea></label>
       <label class="check"><input type="checkbox" id="logSpoiler"> This review contains spoilers</label>
+      <div id="logSeasons" hidden></div>
       <div class="row"><button type="button" id="logSave" class="cta">Save</button><button type="button" id="logBack" class="ghost">Back</button><button type="button" id="logRemove" class="ghost danger" hidden>Remove from watched</button></div>
     </div>
     <div class="row lclose"><button value="close" class="ghost">Close</button></div>
@@ -410,11 +419,55 @@
 <dialog id="themeDlg" class="wide">
   <form method="dialog">
     <h3>Background</h3>
+    <h4 class="tgh">Appearance</h4>
+    <div class="seg mini" id="modeSeg" role="group" aria-label="Appearance"><button type="button" data-v="dark">Dark</button><button type="button" data-v="light">Light</button><button type="button" data-v="auto">Automatic</button></div>
     <p class="hint">Choose the background for ReelPick on this device. Film stills come from TMDB.</p>
     <div id="themeGrid" class="themegrid"></div>
     <input type="file" id="bgFile" accept="image/*" hidden>
     <p id="themeHint" class="hint" hidden>Add your free TMDB key once to load the film stills.</p>
     <div class="row"><button value="close" class="ghost">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="listDlg">
+  <form id="listForm" autocomplete="off">
+    <h3 id="listDlgH">New list</h3>
+    <label>Name <input id="lName" maxlength="60" required placeholder="e.g. Best of 2026"></label>
+    <label>Description (optional) <textarea id="lDesc" maxlength="300" rows="3"></textarea></label>
+    <p class="hint">Lists are seen by the same people who can see your profile.</p>
+    <div class="row"><button type="submit" class="cta">Save</button><button type="button" class="ghost" onclick="this.closest('dialog').close()">Cancel</button></div>
+  </form>
+</dialog>
+
+<dialog id="addListDlg">
+  <form method="dialog">
+    <h3>Add to list</h3>
+    <div id="addListBody" class="flist"></div>
+    <div class="row"><button value="close" class="ghost">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="onbDlg" class="wide">
+  <form method="dialog">
+    <div class="onbtop"><h3 id="onbH">What have you already watched?</h3><span id="onbStep" class="hint"></span></div>
+    <div id="onbBody"></div>
+    <div class="row"><span id="onbCount" class="hint"></span><button type="button" id="onbNext" class="cta">Next</button></div>
+  </form>
+</dialog>
+
+<dialog id="lbDlg">
+  <form method="dialog">
+    <h3>Import from Letterboxd</h3>
+    <ol class="steps">
+      <li>On letterboxd.com open Settings › Data and choose “Export your data”.</li>
+      <li>Letterboxd downloads a .zip file. Choose it here (you don't need to unzip it).</li>
+      <li>ReelPick finds each film on TMDB and keeps your ratings, reviews and the date you watched it.</li>
+    </ol>
+    <p id="lbNeedKey" class="hint bad" hidden>Sign in with Google first, so ReelPick can search every film.</p>
+    <input type="file" id="lbFile" accept=".zip,.csv,application/zip,text/csv" multiple hidden>
+    <progress id="lbProg" hidden></progress>
+    <p id="lbMsg" class="hint" role="status" aria-live="polite"></p>
+    <div class="row"><button type="button" id="lbPick" class="cta">Choose the .zip file</button><button value="close" class="ghost">Close</button></div>
   </form>
 </dialog>
 
@@ -443,6 +496,6 @@
     <div class="row"><button value="save">Save</button><button value="demo" class="ghost">Use demo</button><button value="cancel" class="ghost">Close</button></div>
   </form>
 </dialog>
-<script type="module" src="app.js?v=1795533197"></script>
+<script type="module" src="app.js?v=1795619163"></script>
 </body>
 </html>

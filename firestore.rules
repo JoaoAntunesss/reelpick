@@ -41,7 +41,9 @@ service cloud.firestore {
         && (!('tastes' in d) || d.tastes == null || (d.tastes is map && d.tastes.keys().hasOnly(['genres', 'type']) && d.tastes.genres is list && d.tastes.genres.size() <= 8 && d.tastes.type in ['movie', 'tv', 'both']));
     }
     function validSeen(d) {
-      return d.keys().hasOnly(['type', 'id', 'title', 'year', 'poster', 'rating', 'review', 'spoiler', 'updatedAt'])
+      return d.keys().hasOnly(['type', 'id', 'title', 'year', 'poster', 'rating', 'review', 'spoiler', 'updatedAt', 'firstAt', 'seasons'])
+        && (!('firstAt' in d) || d.firstAt is number)
+        && (!('seasons' in d) || (d.type == 'tv' && d.seasons is map && d.seasons.size() <= 40))
         && d.keys().hasAll(['type', 'id', 'title', 'updatedAt'])
         && d.type in ['movie', 'tv'] && d.id is int
         && d.title is string && d.title.size() <= 200
@@ -119,6 +121,18 @@ service cloud.firestore {
             && request.resource.data.at is number;
           allow delete: if signedIn() && (resource.data.from == request.auth.uid || isOwner(uid));
         }
+      }
+
+      // Own lists ("Best of 2026"…): seen by the same people who can see the profile.
+      match /lists/{lid} {
+        allow read: if canView(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['name', 'desc', 'items', 'updatedAt', 'createdAt'])
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
+          && request.resource.data.desc is string && request.resource.data.desc.size() <= 300
+          && request.resource.data.items is list && request.resource.data.items.size() <= 100
+          && request.resource.data.updatedAt is number && request.resource.data.createdAt is number;
+        allow delete: if isOwner(uid);
       }
 
       // Want to watch.

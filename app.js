@@ -1,11 +1,12 @@
-import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle, tasteGenreIds, hashStr, mulberry32, dayKey } from "./query.js?v=1795533197";
-import { DEMO, DEMO_GENRES } from "./demo.js?v=1795533197";
-import { supported, createReel3D } from "./reel3d.js?v=1795533197";
-import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES, starsText } from "./seen.js?v=1795533197";
-import { initSocial } from "./social.js?v=1795533197";
-import { startI18n, tmdbLang, isPT, setLang } from "./i18n.js?v=1795533197";
-import { icon } from "./icons.js?v=1795533197";
-import { FILMS, PLAIN, validPath, cacheKey } from "./themes.js?v=1795533197";
+import { STYLES, buildParams, commonGenres, easeOutQuart, randInt, buildStrip, shuffle, tasteGenreIds, hashStr, mulberry32, dayKey } from "./query.js?v=1795619163";
+import { DEMO, DEMO_GENRES } from "./demo.js?v=1795619163";
+import { supported, createReel3D } from "./reel3d.js?v=1795619163";
+import { sanitizeItem, keyOf, sanitizeTastes, TASTE_GENRES, starsText } from "./seen.js?v=1795619163";
+import { initSocial } from "./social.js?v=1795619163";
+import { startI18n, tmdbLang, isPT, setLang, tr } from "./i18n.js?v=1795619163";
+import { icon } from "./icons.js?v=1795619163";
+import { FILMS, PLAIN, validPath, cacheKey } from "./themes.js?v=1795619163";
+import { letterboxdFilms, readZipCSVs } from "./letterboxd.js?v=1795619163";
 startI18n();
 { const lb = document.getElementById("langBtn"); if (lb) { lb.textContent = isPT ? "English" : "Português"; lb.lang = isPT ? "en" : "pt-PT"; lb.title = isPT ? "Switch to English" : "Mudar para português"; lb.onclick = () => setLang(isPT ? "en" : "pt"); } }
 
@@ -41,7 +42,7 @@ let social = { enabled: false, signedIn: () => false, upsert() {}, remove() {}, 
 const saveSeen = () => { store.set("rp_seen", JSON.stringify([...seen.values()])); $("seenBtn").textContent = "My seen list (" + seen.size + ")"; };
 function markSeen(it) {
   const k = it.type + ":" + it.id, old = seen.get(k) || {};
-  const item = sanitizeItem({ ...old, id: it.id, type: it.type, title: it.title, year: it.year || old.year, poster: it.poster || old.poster, updatedAt: Date.now() });
+  const item = sanitizeItem({ ...old, id: it.id, type: it.type, title: it.title, year: it.year || old.year, poster: it.poster || old.poster, firstAt: old.firstAt || (seen.has(k) ? old.updatedAt : 0) || Date.now(), updatedAt: Date.now() });
   seen.set(k, item); saveSeen(); social.upsert(item); return k;
 }
 let editing = null;
@@ -450,7 +451,7 @@ async function dailyPick(force) {
 }
 
 // ------------------------------------------------------------------ sections (feed / choose / top)
-const TABS = ["feed", "pick", "chat", "top"];
+const TABS = ["feed", "pick", "news", "chat", "top"];
 let lastIdle = null;
 function showTab(t, focusId) {
   tab = t;
@@ -458,13 +459,14 @@ function showTab(t, focusId) {
   document.querySelectorAll(".navtabs a").forEach((a) => { if (a.dataset.tab === t) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   if (t === "pick" && reel.kind === "dom" && lastIdle && !spinning) reel.idle(lastIdle);
   if (social.onTab) social.onTab(t);
+  if (t === "news") loadNews(false);
   const target = focusId && document.getElementById(focusId);
   if (target) target.scrollIntoView({ block: "start" }); else window.scrollTo(0, 0);
 }
 function route() {
   const h = decodeURIComponent(location.hash.slice(1));
   if (TABS.includes(h)) return showTab(h);
-  if (h.startsWith("u/")) return showTab("profile");
+  if (h.startsWith("u/") || h.startsWith("l/")) return showTab("profile");
   const tm = /^t\/(movie|tv)\/(\d+)$/.exec(h); if (tm) { showTab("title"); renderTitle(tm[1], Number(tm[2])); return; }
   const target = h && document.getElementById(h), view = target && target.closest(".view");
   showTab(view ? view.dataset.view : "feed", view ? h : null);
@@ -549,6 +551,10 @@ async function renderTitle(type, id) {
   ta.href = tr ? "https://www.youtube.com/watch?v=" + encodeURIComponent(tr.key) : "https://www.youtube.com/results?search_query=" + encodeURIComponent(item.title + " " + item.year + " trailer"); acts.appendChild(ta);
   { const aw = awButton({ ...item, orig: (d && (d.original_title || d.original_name)) || item.orig }); if (aw) acts.appendChild(aw); }
   if (social.shareWith && social.signedIn()) mk("Send to a friend", "ghost", () => social.shareWith(item), "send");
+  if (social.addToList && social.signedIn()) mk("Add to list", "ghost", () => social.addToList(item), "list");
+  if (mine && social.shareReview && social.signedIn()) mk("Share as an image", "ghost", () => social.shareReview({ ...mine, poster: mine.poster || item.poster }), "image");
+  document.querySelectorAll(".tseasons").forEach((x) => x.remove());
+  if (mine && mine.seasons) { const sl = el("div", "tseasons"); Object.keys(mine.seasons).sort((a, b) => a - b).forEach((n) => sl.appendChild(el("span", null, "Season " + n + " · " + starsText(mine.seasons[n])))); acts.after(sl); }
   if (social.titleFriends) social.titleFriends(item); else $("tFriends").replaceChildren();
 }
 
@@ -563,6 +569,25 @@ function logShowEdit(it) {
   $("logTitle").textContent = it.title; $("logMeta").textContent = [it.year, it.type === "tv" ? "Series" : "Movie"].filter(Boolean).join(" · ");
   $("logReview").value = (cur && cur.review) || ""; logStars((cur && cur.rating) || 0); $("logSpoiler").checked = !!(cur && cur.spoiler);
   $("logRemove").hidden = !cur; $("logRemove").dataset.armed = ""; $("logRemove").textContent = "Remove from watched";
+  logSeasons(it, (cur && cur.seasons) || {});
+}
+// Series: a rating for each season (optional)
+let seasonVals = {};
+async function logSeasons(it, vals) {
+  const box = $("logSeasons"); seasonVals = { ...vals }; box.replaceChildren(); box.hidden = it.type !== "tv"; if (it.type !== "tv") return;
+  let list = [];
+  if (!demo) { try { const k = "tv:" + it.id, d = titleCache.get(k) || await tmdb("/tv/" + it.id, new URLSearchParams({ language: tmdbLang })); titleCache.set(k, titleCache.get(k) || d); list = (d.seasons || []).filter((x) => x.season_number > 0).slice(0, 40); } catch (e) { /* none */ } }
+  if (!logItem || logItem.id !== it.id) return;
+  if (!list.length) { box.hidden = true; return; }
+  const det = el("details", "seasons"); det.open = Object.keys(seasonVals).length > 0;
+  det.appendChild(el("summary", null, "Rate each season (optional)"));
+  list.forEach((x) => {
+    const n = String(x.season_number), row = el("div", "srow"); row.appendChild(el("span", "sname", "Season " + n));
+    const stars = el("div", "stars mini");
+    for (let i = 1; i <= 5; i++) { const b = el("button", null, "★"); b.type = "button"; b.setAttribute("aria-label", "Season " + n + ": " + i + " star" + (i > 1 ? "s" : "")); b.onclick = () => { const v = nextStar(seasonVals[n] || 0, i); if (v) seasonVals[n] = v; else delete seasonVals[n]; starRow(stars, v); }; stars.appendChild(b); }
+    row.appendChild(stars); starRow(stars, seasonVals[n] || 0); det.appendChild(row);
+  });
+  box.appendChild(det);
 }
 function logShowFind() { logItem = null; $("logFind").hidden = false; $("logEdit").hidden = true; $("logH").textContent = "Log a movie or series"; setTimeout(() => $("logQ").focus(), 50); }
 async function logSearch() {
@@ -601,7 +626,8 @@ $("logSave").onclick = () => {
   if (!logItem) return;
   const k = markSeen(logItem), cur = seen.get(k), r = Number($("logEdit").dataset.rating) || null;
   const rv = $("logReview").value.trim(), base = { ...cur }; delete base.spoiler;
-  const item = sanitizeItem({ ...base, rating: r, review: rv, spoiler: !!rv && $("logSpoiler").checked, updatedAt: Date.now() });
+  delete base.seasons;
+  const item = sanitizeItem({ ...base, rating: r, review: rv, spoiler: !!rv && $("logSpoiler").checked, seasons: logItem.type === "tv" ? seasonVals : null, updatedAt: Date.now() });
   seen.set(k, item); saveSeen(); social.upsert(item); renderSeen();
   $("logDlg").close(); say("Saved."); if (social.seenChanged) social.seenChanged();
   if (social.isWanted && social.isWanted(k) && social.toggleWant) social.toggleWant(item);   // watched: leave the watchlist
@@ -619,6 +645,130 @@ function openLog(it) {
 }
 window.openLog = openLog;
 $("logBtn").onclick = () => openLog();
+
+// ------------------------------------------------------------------ News: headlines (AW server, from Portuguese film and TV sites) + what's on (TMDB)
+const NEWS = "https://europe-west1-aw-sites-e31c3.cloudfunctions.net/noticias";
+let newsAt = 0, newsBusy = false;
+function posterRow(list, extra) {
+  const row = el("div", "nrow2");
+  list.forEach((it) => {
+    const a = el("a", "nposter"); a.href = "#t/" + it.type + "/" + it.id; a.title = it.title;
+    if (it.poster) { const i = el("img"); i.src = it.poster; i.alt = it.title; i.loading = "lazy"; a.appendChild(i); } else a.appendChild(el("span", "ph", it.title));
+    const t = el("b", null, it.title); t.translate = false; a.appendChild(t);
+    const sub = extra ? extra(it) : [it.year, it.type === "tv" ? "Series" : "Movie"].filter(Boolean).join(" · "); if (sub) a.appendChild(el("small", null, sub));
+    if (seen.has(it.type + ":" + it.id)) a.appendChild(el("i", "nseen", "Seen"));
+    row.appendChild(a);
+  });
+  return row;
+}
+const fmtDay = (d) => new Date(d + "T12:00:00").toLocaleDateString(isPT ? "pt-PT" : "en", { day: "numeric", month: "short" });
+async function loadNews(force) {
+  if (newsBusy || (!force && Date.now() - newsAt < 30 * 60e3 && $("newsBody").children.length)) return;
+  newsBusy = true; const body = $("newsBody"); body.replaceChildren(el("p", "hint", "Loading…"));
+  const sec = (title, node, hint) => { const s2 = el("section", "nsec"); const h = el("div", "feedtop"); h.appendChild(el("h2", null, title)); if (hint) h.appendChild(el("small", "hint", hint)); s2.append(h, node); return s2; };
+  const out = [];
+  // headlines
+  const headlines = fetch(NEWS + "?lang=" + (isPT ? "pt" : "en")).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  let rows = [];
+  if (!demo) {
+    const q = (path, extra = {}) => tmdb(path, new URLSearchParams({ language: tmdbLang, region: state.region, ...extra })).then((r) => r.results || []).catch(() => []);
+    const today = new Date().toISOString().slice(0, 10);
+    const [now, up, trend, air] = await Promise.all([q("/movie/now_playing"), q("/movie/upcoming"), tmdb("/trending/all/week", new URLSearchParams({ language: tmdbLang })).then((r) => r.results || []).catch(() => []), q("/tv/on_the_air")]);
+    rows = [
+      ["In cinemas now", now.map((x) => norm(x, "movie")).filter((x) => x.poster), null, REGIONS[state.region]],
+      ["Coming soon to cinemas", up.filter((x) => (x.release_date || "") >= today).sort((a, b) => a.release_date.localeCompare(b.release_date)).map((x) => ({ ...norm(x, "movie"), date: x.release_date })).filter((x) => x.poster), (it) => fmtDay(it.date), REGIONS[state.region]],
+      ["Trending this week", trend.filter((x) => x.media_type === "movie" || x.media_type === "tv").map((x) => norm(x, x.media_type)).filter((x) => x.poster), null, ""],
+      ["Series with new episodes", air.map((x) => norm(x, "tv")).filter((x) => x.poster && x.votes > 50), null, ""],
+    ];
+  }
+  const h = await headlines;
+  newsBusy = false; body.replaceChildren();
+  if (h && Array.isArray(h.items) && h.items.length) {
+    const list = el("div", "hlist");
+    h.items.slice(0, 30).forEach((n) => {
+      if (!/^https:\/\//.test(n.link || "")) return;
+      const a = el("a", "hitem"); a.href = n.link; a.target = "_blank"; a.rel = "noopener noreferrer";
+      const t = el("b", null, n.title); t.translate = false; a.appendChild(t);
+      const m = el("small"); const src = el("span", "hsrc", n.source || new URL(n.link).hostname.replace(/^www\./, "")); src.translate = false; m.appendChild(src); if (n.at) m.appendChild(el("span", null, " · " + tr(timeAgoLocal(n.at)))); a.appendChild(m);
+      list.appendChild(a);
+    });
+    out.push(sec("Headlines", list, "From film and TV sites. Opens on the original site."));
+  }
+  rows.forEach(([t, list, extra, hint]) => { if (list.length) out.push(sec(t, posterRow(list.slice(0, 20), extra), hint)); });
+  if (!out.length) body.appendChild(el("div", "card empty", demo ? "Sign in with Google to see what's on in cinemas and on the platforms." : "Could not load the news. Try again later."));
+  body.append(...out); newsAt = Date.now();
+}
+function timeAgoLocal(ts) { const s2 = Math.max(0, (Date.now() - ts) / 1000); if (s2 < 3600) return Math.max(1, Math.floor(s2 / 60)) + " min ago"; if (s2 < 86400) return Math.floor(s2 / 3600) + " h ago"; const d = Math.floor(s2 / 86400); return d === 1 ? "yesterday" : d + " days ago"; }
+$("newsRefresh").onclick = () => loadNews(true);
+
+// ------------------------------------------------------------------ import from Letterboxd (the .zip from Settings › Data › Export your data)
+let lbBusy = false;
+function openLetterboxd() {
+  $("lbProg").hidden = true; $("lbMsg").textContent = ""; $("lbPick").disabled = false;
+  $("lbNeedKey").hidden = !demo; $("lbPick").hidden = demo;
+  $("lbDlg").showModal();
+}
+window.openLetterboxd = openLetterboxd;
+$("lbPick").onclick = () => $("lbFile").click();
+$("lbFile").onchange = async () => {
+  const files = [...$("lbFile").files]; $("lbFile").value = ""; if (!files.length || lbBusy) return;
+  const msg = $("lbMsg"); msg.className = "hint";
+  let csv = {};
+  try {
+    for (const f of files) {
+      if (/\.zip$/i.test(f.name)) Object.assign(csv, await readZipCSVs(await f.arrayBuffer()));
+      else if (/\.csv$/i.test(f.name)) csv[f.name.toLowerCase().replace(/^.*[\\/]/, "")] = await f.text();
+    }
+  } catch (e) { msg.textContent = "That file could not be read. Choose the .zip that Letterboxd sent you."; msg.className = "hint bad"; return; }
+  const films = letterboxdFilms(csv).slice(0, 3000);
+  if (!films.length) { msg.textContent = "No films found in that file. Choose the .zip that Letterboxd sent you (or watched.csv / ratings.csv)."; msg.className = "hint bad"; return; }
+  lbBusy = true; $("lbPick").disabled = true; $("lbProg").hidden = false; $("lbProg").max = films.length; $("lbProg").value = 0;
+  let i = 0, done = 0, added = 0, missed = []; const toPush = [];
+  const one = async (f) => {
+    const q = new URLSearchParams({ query: f.name, language: tmdbLang, include_adult: "false" });
+    let r = await tmdb("/search/movie", new URLSearchParams([...q, ...(f.year ? [["primary_release_year", f.year]] : [])]));
+    if (!r.results.length && f.year) r = await tmdb("/search/movie", q);
+    const x = r.results[0]; if (!x) { missed.push(f.name + (f.year ? " (" + f.year + ")" : "")); return; }
+    const it = norm(x, "movie"), k = "movie:" + it.id, cur = seen.get(k), at = f.at || Date.now();
+    const item = sanitizeItem({ ...(cur || {}), type: "movie", id: it.id, title: it.title, year: it.year || f.year, poster: it.poster, rating: (cur && cur.rating) || f.rating, review: (cur && cur.review) || f.review, firstAt: (cur && cur.firstAt) || at, updatedAt: cur ? cur.updatedAt : at });
+    if (item) { seen.set(k, item); toPush.push(item); if (!cur) added++; }
+  };
+  const worker = async () => { while (i < films.length) { const f = films[i++]; try { await one(f); } catch (e) { missed.push(f.name); } done++; $("lbProg").value = done; msg.textContent = done + " / " + films.length; } };
+  await Promise.all([1, 2, 3, 4].map(worker));
+  saveSeen(); renderSeen(); social.pushMany(toPush); if (social.seenChanged) social.seenChanged();
+  lbBusy = false; $("lbPick").disabled = false;
+  msg.textContent = "Imported " + added + " new films (" + toPush.length + " in total)." + (missed.length ? " Not found: " + missed.slice(0, 8).join(", ") + (missed.length > 8 ? "…" : "") : "");
+  msg.className = "hint good";
+};
+$("seenLb").onclick = () => { $("seenDlg").close(); openLetterboxd(); };
+
+// ------------------------------------------------------------------ genres and running time per title (statistics), cached in this browser
+let metaCache = {}; try { metaCache = JSON.parse(store.get("rp_meta_" + tmdbLang, "{}")) || {}; } catch (e) { metaCache = {}; }
+const metaOf = (k) => (metaCache[k] ? { genres: metaCache[k].g || [], runtime: metaCache[k].r || 0 } : null);
+async function fetchMeta(items, onProgress) {
+  if (demo) { items.forEach((it) => { const d = DEMO.find((x) => x.type === it.type && x.id === it.id); if (d && !metaCache[it.type + ":" + it.id]) metaCache[it.type + ":" + it.id] = { g: d.genres, r: 0 }; }); return; }
+  const todo = items.filter((it) => !metaCache[it.type + ":" + it.id]).slice(0, 400);
+  let i = 0, last = Date.now();
+  const worker = async () => {
+    while (i < todo.length) {
+      const it = todo[i++], k = it.type + ":" + it.id;
+      try { const d = titleCache.get(k) || await tmdb("/" + it.type + "/" + it.id, new URLSearchParams({ language: tmdbLang })); metaCache[k] = { g: (d.genres || []).map((g) => g.name).slice(0, 4), r: d.runtime || (d.episode_run_time || [])[0] || 0 }; }
+      catch (e) { metaCache[k] = { g: [], r: 0 }; }
+      if (onProgress && Date.now() - last > 700) { last = Date.now(); onProgress(); }
+    }
+  };
+  await Promise.all([1, 2, 3, 4, 5].map(worker));
+  store.set("rp_meta_" + tmdbLang, JSON.stringify(metaCache));
+}
+async function popularTitles() {
+  if (demo) return DEMO.slice(0, 18).map((x) => ({ ...x, poster: null }));
+  const want = tastes.type === "tv" ? ["tv"] : tastes.type === "movie" ? ["movie"] : ["movie", "tv"];
+  const pages = await Promise.all(want.flatMap((t) => [1, 2].map((pg) => tmdb("/" + t + "/popular", new URLSearchParams({ language: tmdbLang, page: String(pg), region: state.region })).then((r) => r.results.map((x) => norm(x, t))).catch(() => []))));
+  const top = await tmdb("/trending/all/week", new URLSearchParams({ language: tmdbLang })).then((r) => r.results.filter((x) => x.media_type === "movie" || x.media_type === "tv").map((x) => norm(x, x.media_type))).catch(() => []);
+  const all = [...top, ...pages.flat()].filter((x) => x.poster && x.votes > 200), out = [], ks = new Set();
+  all.forEach((x) => { const k = x.type + ":" + x.id; if (!ks.has(k)) { ks.add(k); out.push(x); } });
+  return out.slice(0, 24);
+}
 
 // ------------------------------------------------------------------ background themes
 let bdPaths = {}; try { bdPaths = JSON.parse(store.get("rp_bd", "{}")) || {}; } catch (e) { bdPaths = {}; }
@@ -680,6 +830,17 @@ $("bgFile").onchange = async () => {
 $("themeBtn").onclick = async () => { paintThemes(); $("themeDlg").showModal(); await resolveBackdrops(); paintThemes(); };
 window.openThemes = () => $("themeBtn").click();
 applyTheme(store.get("rp_theme", "dark"));
+// Appearance: dark, light or follow the phone
+const modeQ = matchMedia("(prefers-color-scheme: light)");
+function applyMode() {
+  const m = store.get("rp_mode", "dark"), light = m === "light" || (m === "auto" && modeQ.matches);
+  document.documentElement.classList.toggle("light", light);
+  document.querySelector('meta[name="theme-color"]').content = light ? "#f3f4f6" : "#101317";
+  document.querySelectorAll("#modeSeg button").forEach((b) => { b.classList.toggle("on", b.dataset.v === m); b.setAttribute("aria-pressed", b.dataset.v === m); });
+}
+document.querySelectorAll("#modeSeg button").forEach((b) => { b.onclick = () => { store.set("rp_mode", b.dataset.v); applyMode(); }; });
+modeQ.addEventListener && modeQ.addEventListener("change", applyMode);
+applyMode();
 
 // ------------------------------------------------------------------ start
 route();
@@ -691,10 +852,11 @@ lastIdle = shuffle(DEMO.map((x) => ({ ...x, poster: null }))); reel.idle(lastIdl
 window.rpSharedKey = (k) => {
   if (key || !k || k === sharedKey) return;
   sharedKey = k; demo = false; if (window.rpPaintKey) window.rpPaintKey(); loadMeta(); dailyPick(true);
+  newsAt = 0; if (tab === "news") loadNews(true);
   resolveBackdrops().then(() => applyTheme(store.get("rp_theme", "dark")));
   if (/^#t\//.test(location.hash)) route();
 };
-social = await initSocial({ $, el, seen, saveSeen, renderSeen, say, tastes: { get: () => tastes, set: (t) => setTastes(t, true) }, onNewProfile: openTastes, openTastes });
+social = await initSocial({ $, el, seen, saveSeen, renderSeen, say, tastes: { get: () => tastes, set: (t) => setTastes(t, true) }, onNewProfile: openTastes, openTastes, markSeen: (it) => { markSeen(it); renderSeen(); }, metaOf, fetchMeta, popularTitles });
 dailyPick(false);
 if (social.onTab) social.onTab(tab);
 if (tab === "title") route();

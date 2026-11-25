@@ -1,8 +1,10 @@
 // Accounts, nicknames, friend requests, profiles and comparison. Does nothing unless firebase-config.js has a config.
-import { isPT } from "./i18n.js?v=1795533197";
-import { icon } from "./icons.js?v=1795533197";
-import { starsText } from "./seen.js?v=1795533197";
-import { sanitizeItem, mergeSeen, compareLists, normalizeHandle, sanitizePinned, validPhoto, sanitizeProfile, buildFeed, timeAgo } from "./seen.js?v=1795533197";
+import { isPT } from "./i18n.js?v=1795619163";
+import { icon } from "./icons.js?v=1795619163";
+import { starsText } from "./seen.js?v=1795619163";
+import { sanitizeItem, mergeSeen, compareLists, normalizeHandle, sanitizePinned, validPhoto, sanitizeProfile, buildFeed, timeAgo, watchedAt } from "./seen.js?v=1795619163";
+import { computeStats, yearsIn } from "./stats.js?v=1795619163";
+import { reviewImage, recapImage, shareCanvas } from "./share.js?v=1795619163";
 
 const stars = (n) => (n ? starsText(n) : "not rated");
 
@@ -30,10 +32,10 @@ export async function initSocial(ctx) {
   const hasTastes = (t) => t && t.genres && t.genres.length;
   const off = { enabled: false, signedIn: () => false, upsert() {}, remove() {}, pushMany() {}, pin: async () => {} };
   let cfg = null;
-  try { cfg = (await import("./firebase-config.js?v=1795533197")).firebaseConfig; } catch (e) { /* no config file */ }
+  try { cfg = (await import("./firebase-config.js?v=1795619163")).firebaseConfig; } catch (e) { /* no config file */ }
   if (!cfg) return off;
   let cloud;
-  try { cloud = await (await import("./cloud.js?v=1795533197")).init(cfg); } catch (e) { console.warn("Cloud unavailable:", e); return off; }
+  try { cloud = await (await import("./cloud.js?v=1795619163")).init(cfg); } catch (e) { console.warn("Cloud unavailable:", e); return off; }
 
   let blocked = new Map();   // uid -> {name, handle}
   const isBlocked = (uid) => blocked.has(uid);
@@ -86,7 +88,8 @@ export async function initSocial(ctx) {
       await loadBlocks();
       try { await syncDown(user); } catch (e) { console.warn(e); say("Signed in, but the cloud could not be read (" + (e.code || e.message) + "). Check the Firestore rules."); }
       cloud.readSharedKey().then((k) => { if (k && window.rpSharedKey) window.rpSharedKey(k); });
-      await loadWants(); paintAccount(); loadFeed(true); startChats(); startNotifs(); if (curTab === "profile") onTab("profile"); paintNotifBtn(); delete lbCache.friends; delete lbCache.all; if (curTab === "top") loadBoard(true);
+      await loadWants(); paintAccount(); loadFeed(true); startChats(); startNotifs();
+      if (profile && profile.handle && seen.size < 3) setTimeout(startOnboarding, 900); if (curTab === "profile") onTab("profile"); paintNotifBtn(); delete lbCache.friends; delete lbCache.all; if (curTab === "top") loadBoard(true);
       const nick = normalizeHandle(new URLSearchParams(location.search).get("p"));
       if (nick && profile) { history.replaceState(null, "", location.pathname + location.hash); const uid = await guard(cloud.findHandle(nick)); if (uid) openProfile(uid, { handle: nick }); else say("Nobody uses the nickname @" + nick + "."); }
     } else {
@@ -154,7 +157,7 @@ export async function initSocial(ctx) {
     try {
       profile.name = name; await cloud.setHandle(h, profile.handle, { ...profile, name }); profile.handle = h;
       await guard(cloud.saveProfile(profile)); $("nickDlg").close(); paintAccount(); say("Nickname saved: @" + h);
-      if (nkThenTastes && ctx.onNewProfile) setTimeout(() => ctx.onNewProfile(), 300);
+      if (nkThenTastes && ctx.onNewProfile) setTimeout(() => ctx.onNewProfile(), 300); else setTimeout(startOnboarding, 400);
     } catch (e) { $("nkMsg").textContent = e.code === "taken" ? "That nickname is taken. Try another." : "Could not save the nickname (" + (e.code || e.message) + ")."; $("nkMsg").className = "hint bad"; $("nkSave").disabled = false; }
   };
 
@@ -248,12 +251,12 @@ export async function initSocial(ctx) {
     document.querySelectorAll("dialog[open]").forEach((d) => d.close());
     const h = "#u/" + uid; if (location.hash === h) renderProfilePage(uid); else location.hash = h;
   }
-  let prTab = "posts", prUid = null;
+  let prTab = "posts", prUid = null, pendingTab = null;
   const INFO_LABELS = [["movie", "Favourite movie"], ["series", "Favourite series"], ["director", "Favourite director"], ["actor", "Favourite actor"], ["watching", "Watching now"], ["city", "City"]];
   function stat(n, label) { const d = el("div", "pstat"); d.appendChild(el("b", null, String(n))); d.appendChild(el("span", null, label)); return d; }
   async function renderProfilePage(uid) {
     if (!me) { $("prName").textContent = ""; $("prBody").replaceChildren(emptyCard("Sign in to see profiles.", "Sign in with Google", () => $("signIn").click())); return; }
-    const mine = uid === me.uid; if (prUid !== uid) prTab = "posts"; prUid = uid;
+    const mine = uid === me.uid; if (prUid !== uid) prTab = pendingTab || (openListId ? "lists" : "posts"); pendingTab = null; prUid = uid;
     $("prBody").replaceChildren(...skeletons(2));
     let data = null;
     try { data = await cloud.loadProfile(uid); } catch (e) { if (e.code !== "private") { say("Could not open the profile."); } }
@@ -326,6 +329,7 @@ export async function initSocial(ctx) {
         list.forEach((it) => body.appendChild(postCard(entry({ item: it, at: it.updatedAt }))));
       } else if (prTab === "seen") {
         if (!items.length && !mine) { body.appendChild(emptyCard("Nothing logged yet")); return; }
+        if (mine) { const r = el("div", "row lbrow2"); const b = el("button", "ghost sm"); b.type = "button"; b.append(icon("upload", 16), el("span", null, "Import from Letterboxd")); b.onclick = () => window.openLetterboxd && window.openLetterboxd(); r.appendChild(b); body.appendChild(r); }
         const g = el("div", "sgrid");
         if (mine) { const add = el("button", "sposter addtile"); add.type = "button"; add.appendChild(icon("plus", 28)); add.appendChild(el("span", null, "Log a movie or series")); add.onclick = () => window.openLog && window.openLog(); g.appendChild(add); }
         [...items].sort((a, b) => b.updatedAt - a.updatedAt).forEach((it) => {
@@ -344,12 +348,236 @@ export async function initSocial(ctx) {
           list.forEach((it) => { const c = el("a", "sposter"); c.href = "#t/" + it.type + "/" + it.id; c.title = it.title + (it.year ? " (" + it.year + ")" : ""); if (it.poster) { const i = el("img"); i.src = it.poster; i.alt = it.title; i.loading = "lazy"; c.appendChild(i); } else c.appendChild(el("span", null, it.title)); g.appendChild(c); });
           body.appendChild(g);
         });
-      } else paintCompare(body, items, name);
+      } else if (prTab === "lists") paintLists(body, uid, mine, name);
+      else if (prTab === "stats") paintStats(body, items, mine, { name, handle });
+      else paintCompare(body, items, name);
     };
     $("prTabs").querySelectorAll("button").forEach((b) => { b.onclick = () => { prTab = b.dataset.t; paintTab(); }; });
     paintTab();
   }
 
+
+  // ---------------------------------------------------------------- own lists
+  let openListId = null, myLists = null;
+  const listLink = (uid, id) => location.origin + location.pathname + "#l/" + uid + "/" + id;
+  function collage(items) {
+    const c = el("div", "lcol"); items.slice(0, 4).forEach((x) => { if (x.poster) { const i = el("img"); i.src = x.poster.replace("/w342/", "/w185/"); i.alt = ""; i.loading = "lazy"; c.appendChild(i); } else c.appendChild(el("span")); });
+    for (let i = items.length; i < 4; i++) c.appendChild(el("span")); return c;
+  }
+  async function paintLists(body, uid, mine, name) {
+    body.replaceChildren(...skeletons(1));
+    if (openListId) { const l = await cloud.loadList(uid, openListId); if (prTab !== "lists" || prUid !== uid) return; if (l) return paintListPage(body, uid, l, mine, name); openListId = null; }
+    const lists = await cloud.loadLists(uid); if (mine) myLists = lists;
+    if (prTab !== "lists" || prUid !== uid) return;
+    body.replaceChildren();
+    const g = el("div", "lgrid");
+    if (mine) { const add = el("button", "lcard addtile"); add.type = "button"; add.appendChild(icon("plus", 28)); add.appendChild(el("span", null, "New list")); add.onclick = () => editList(null); g.appendChild(add); }
+    lists.forEach((l) => {
+      const c = el("button", "lcard"); c.type = "button"; c.appendChild(collage(l.items));
+      const t = el("b", null, l.name); t.translate = false; c.appendChild(t); c.appendChild(el("small", null, l.items.length + (l.items.length === 1 ? " title" : " titles")));
+      c.onclick = () => { location.hash = "l/" + uid + "/" + l.id; };
+      g.appendChild(c);
+    });
+    if (!lists.length && !mine) { body.appendChild(emptyCard("No lists yet.")); return; }
+    body.appendChild(g);
+    if (mine && !lists.length) body.appendChild(el("p", "hint", "Make lists like “Best of " + new Date().getFullYear() + "” or “To watch with the family” and share them."));
+  }
+  function paintListPage(body, uid, l, mine, name) {
+    body.replaceChildren();
+    const head = el("div", "lhead2");
+    const back = el("button", "ghost sm"); back.type = "button"; back.append(icon("back", 16), el("span", null, "All lists")); back.onclick = () => { location.hash = "u/" + uid; };
+    head.appendChild(back);
+    const h = el("h2", "ltitle", l.name); h.translate = false; head.appendChild(h);
+    head.appendChild(el("small", "hint", (mine ? "" : name + " · ") + l.items.length + (l.items.length === 1 ? " title" : " titles")));
+    if (l.desc) { const d = el("p", "ldesc", l.desc); d.translate = false; head.appendChild(d); }
+    const acts = el("div", "row");
+    const share = el("button", "ghost sm", "Copy link"); share.type = "button";
+    share.onclick = async () => { const u = listLink(uid, l.id); try { if (navigator.share && matchMedia("(pointer:coarse)").matches) await navigator.share({ title: l.name, url: u }); else { await navigator.clipboard.writeText(u); say("Link copied."); } } catch (e) { /* cancelled */ } };
+    acts.appendChild(share);
+    if (mine) {
+      const ed = el("button", "ghost sm", "Edit"); ed.type = "button"; ed.onclick = () => editList(l); acts.appendChild(ed);
+      const del = el("button", "ghost sm danger", "Delete list"); del.type = "button"; del.onclick = async () => { if (!confirmBtn(del, "Delete list")) return; try { await cloud.deleteList(l.id); myLists = null; say("List deleted."); location.hash = "u/" + uid; } catch (e) { say("Could not delete (" + (e.code || e.message) + ")."); } };
+      acts.appendChild(del);
+    }
+    head.appendChild(acts); body.appendChild(head);
+    if (!l.items.length) { body.appendChild(emptyCard(mine ? "This list is empty. Open a movie or series and press “Add to list”." : "This list is empty.")); return; }
+    const g = el("ol", "sgrid lnum");
+    l.items.forEach((it, i) => {
+      const li = el("li", "sposter"); const a = el("a"); a.href = "#t/" + it.type + "/" + it.id; a.title = it.title + (it.year ? " (" + it.year + ")" : "");
+      if (it.poster) { const im = el("img"); im.src = it.poster; im.alt = it.title; im.loading = "lazy"; a.appendChild(im); } else a.appendChild(el("span", null, it.title));
+      a.appendChild(el("b", "lrank", String(i + 1))); li.appendChild(a);
+      if (mine) { const x = el("button", "lrm", "×"); x.type = "button"; x.title = "Remove from list"; x.setAttribute("aria-label", "Remove from list");
+        x.onclick = async () => { l.items.splice(i, 1); try { await cloud.saveList(l, l.id); myLists = null; paintListPage(body, uid, l, mine, name); } catch (e) { say("Could not save (" + (e.code || e.message) + ")."); } }; li.appendChild(x); }
+      g.appendChild(li);
+    });
+    body.appendChild(g);
+  }
+  let listEditing = null, listThen = null;
+  function editList(l, then) {
+    listEditing = l; listThen = then || null;
+    $("listDlgH").textContent = l ? "Edit list" : "New list"; $("lName").value = l ? l.name : ""; $("lDesc").value = l ? l.desc : "";
+    $("listDlg").showModal(); $("lName").focus();
+  }
+  $("listForm").onsubmit = async (ev) => {
+    ev.preventDefault(); const name = $("lName").value.trim(); if (!name) return;
+    const l = { ...(listEditing || { items: [] }), name, desc: $("lDesc").value.trim() };
+    try {
+      const id = await cloud.saveList(l, listEditing && listEditing.id); myLists = null; $("listDlg").close();
+      if (listThen) { listThen(id); return; }
+      if (listEditing) renderProfilePage(me.uid); else location.hash = "l/" + me.uid + "/" + id;
+    } catch (e) { say("Could not save (" + (e.code || e.message) + ")."); }
+  };
+  async function addToList(item) {
+    if (!me) { say("Sign in with Google to make lists."); return; }
+    const box = $("addListBody"); box.replaceChildren(el("p", "hint", "Loading…")); $("addListDlg").showModal();
+    if (!myLists) myLists = await cloud.loadLists(me.uid);
+    const k = postKey(item); box.replaceChildren();
+    const it = { type: item.type, id: item.id, title: item.title, year: String(item.year || ""), poster: item.poster || null };
+    myLists.forEach((l) => {
+      const has = l.items.some((x) => postKey(x) === k);
+      const r = el("button", "crow" + (has ? " sel" : "")); r.type = "button"; r.appendChild(collage(l.items));
+      const t = el("span", "ctext"); const b = el("b", null, l.name); b.translate = false; t.appendChild(b); t.appendChild(el("small", null, has ? "Already in this list · tap to remove" : l.items.length + (l.items.length === 1 ? " title" : " titles"))); r.appendChild(t);
+      r.onclick = async () => {
+        const i = l.items.findIndex((x) => postKey(x) === k);
+        if (i >= 0) l.items.splice(i, 1); else { if (l.items.length >= 100) { say("A list can have up to 100 titles."); return; } l.items.push(it); }
+        try { await cloud.saveList(l, l.id); $("addListDlg").close(); say(i >= 0 ? "Removed from “" + l.name + "”." : "Added to “" + l.name + "”."); } catch (e) { say("Could not save (" + (e.code || e.message) + ")."); }
+      };
+      box.appendChild(r);
+    });
+    const nw = el("button", "cta sm", "New list"); nw.type = "button";
+    nw.onclick = () => { $("addListDlg").close(); editList(null, async (id) => { myLists = null; const l = await cloud.loadList(me.uid, id); if (l) { l.items.push(it); await guard(cloud.saveList(l, id)); say("Added to “" + l.name + "”."); } }); };
+    box.appendChild(nw);
+  }
+
+  // ---------------------------------------------------------------- statistics and year in review
+  let statsYear = null;
+  async function paintStats(body, items, mine, who) {
+    body.replaceChildren();
+    if (!items.length) { body.appendChild(emptyCard(mine ? "Log a few movies or series to see your statistics." : "Nothing logged yet")); return; }
+    const years = yearsIn(items); if (statsYear && !years.includes(statsYear)) statsYear = null;
+    const seg = el("div", "chips statyears");
+    [[null, "All time"], ...years.map((y) => [y, String(y)])].forEach(([y, label]) => { const b = el("button", "chip" + (statsYear === y ? " on" : ""), label); b.type = "button"; b.onclick = () => { statsYear = y; paintStats(body, items, mine, who); }; seg.appendChild(b); });
+    body.appendChild(seg);
+    const wrap = el("div", "stats"); body.appendChild(wrap);
+    const draw = () => {
+      const st = computeStats(items, statsYear, ctx.metaOf); wrap.replaceChildren();
+      const num = (n) => String(n).replace(".", isPT ? "," : ".");
+      if (statsYear) {
+        const rc = el("div", "card recap");
+        rc.appendChild(el("div", "lbl", statsYear + " in review"));
+        const big = el("div", "rbig"); big.appendChild(el("b", null, String(st.total))); big.appendChild(el("span", null, st.total === 1 ? "title watched" : "titles watched")); rc.appendChild(big);
+        const lines = [];
+        if (st.topGenres[0]) lines.push(["Favourite genre", st.topGenres[0].name]);
+        if (st.best[0]) lines.push(["Best rated", st.best[0].title]);
+        if (st.topMonth != null && st.total > 1) lines.push(["Busiest month", new Date(statsYear, st.topMonth, 1).toLocaleDateString(isPT ? "pt-PT" : "en", { month: "long" })]);
+        if (st.hours) lines.push(["Hours of movies", String(st.hours)]);
+        const dl = el("dl", "rlines"); lines.forEach(([k, v]) => { const w = el("div"); w.appendChild(el("dt", null, k)); const dd = el("dd", null, v); if (k === "Best rated") dd.translate = false; w.appendChild(dd); dl.appendChild(w); }); rc.appendChild(dl);
+        if (mine) { const b = el("button", "cta sm", "Share as an image"); b.type = "button"; b.prepend(icon("image", 16)); b.onclick = () => shareRecap(st, statsYear, who); rc.appendChild(b); }
+        wrap.appendChild(rc);
+      }
+      const tiles = el("div", "stiles");
+      [[st.total, "watched"], [st.movies, st.movies === 1 ? "movie" : "movies"], [st.series, "series"], [st.reviews, st.reviews === 1 ? "review" : "reviews"], [st.avg != null ? "★ " + num(st.avg) : "–", "average rating"], [st.hours, "hours of movies"]]
+        .forEach(([n, l]) => { const t = el("div", "stile"); t.appendChild(el("b", null, String(n))); t.appendChild(el("span", null, l)); tiles.appendChild(t); });
+      wrap.appendChild(tiles);
+      if (st.rated) {
+        const c = el("div", "card scard2"); c.appendChild(el("h3", null, "Ratings"));
+        const max = Math.max(...st.hist.map((h) => h.n), 1), bars = el("div", "hist");
+        st.hist.forEach((h) => { const b = el("div", "hbar"); const f = el("i"); f.style.height = Math.round((h.n / max) * 100) + "%"; b.title = num(h.stars) + " ★: " + h.n; b.append(f, el("small", null, h.stars % 1 ? "" : String(h.stars))); bars.appendChild(b); });
+        c.appendChild(bars); wrap.appendChild(c);
+      }
+      if (st.topGenres.length) {
+        const c = el("div", "card scard2"); c.appendChild(el("h3", null, "Favourite genres"));
+        const max = st.topGenres[0].n;
+        st.topGenres.forEach((g) => { const r = el("div", "gbar"); r.appendChild(el("span", null, g.name)); const t = el("span", "gtrack"); const f = el("i"); f.style.width = Math.round((g.n / max) * 100) + "%"; t.appendChild(f); r.appendChild(t); r.appendChild(el("b", null, String(g.n))); c.appendChild(r); });
+        wrap.appendChild(c);
+      }
+      if (statsYear && st.total) {
+        const c = el("div", "card scard2"); c.appendChild(el("h3", null, "Month by month"));
+        const max = Math.max(...st.months, 1), bars = el("div", "hist months");
+        st.months.forEach((n, i) => { const b = el("div", "hbar"); const f = el("i"); f.style.height = Math.round((n / max) * 100) + "%"; b.title = n + ""; b.append(f, el("small", null, new Date(2020, i, 1).toLocaleDateString(isPT ? "pt-PT" : "en", { month: "narrow" }))); bars.appendChild(b); });
+        c.appendChild(bars); wrap.appendChild(c);
+      }
+      if (st.best.length) {
+        const c = el("div", "card scard2"); c.appendChild(el("h3", null, "Best rated"));
+        st.best.forEach((it) => { const a = el("a", "brow"); a.href = "#t/" + it.type + "/" + it.id; if (it.poster) { const i = el("img"); i.src = it.poster.replace("/w342/", "/w92/"); i.alt = ""; i.loading = "lazy"; a.appendChild(i); } const t = el("span", null, it.title); t.translate = false; a.appendChild(t); a.appendChild(el("b", null, starsText(it.rating))); c.appendChild(a); });
+        wrap.appendChild(c);
+      }
+      if (st.metaCoverage < 1) wrap.appendChild(el("p", "hint", "Loading genres and running times…"));
+    };
+    draw();
+    if (ctx.fetchMeta) { const list = items.filter((it) => !statsYear || new Date(watchedAt(it)).getFullYear() === statsYear); await ctx.fetchMeta(list, () => { if (prTab === "stats") draw(); }); if (prTab === "stats") draw(); }
+  }
+  const labelsFor = () => ({ site: location.host || "reelpick", by: isPT ? "A minha crítica" : "My review" });
+  async function shareReview(it) {
+    say(isPT ? "A preparar a imagem…" : "Preparing the image…");
+    try {
+      const c = await reviewImage(it, { name: profile.name, handle: profile.handle }, { ...labelsFor(), type: it.type === "tv" ? (isPT ? "Série" : "Series") : (isPT ? "Filme" : "Movie") });
+      const r = await shareCanvas(c, "reelpick-" + it.type + "-" + it.id + ".png", it.title);
+      say(r === "downloaded" ? (isPT ? "Imagem descarregada. Publica-a nas tuas stories." : "Image downloaded. Post it to your stories.") : "");
+    } catch (e) { say(isPT ? "Não foi possível criar a imagem." : "Could not create the image."); }
+  }
+  async function shareRecap(st, year, who) {
+    say(isPT ? "A preparar a imagem…" : "Preparing the image…");
+    const n = (x) => String(x).replace(".", isPT ? "," : ".");
+    const L = isPT ? { title: "O meu ano no ReelPick", titles: "títulos", movies: "filmes", series: "séries", reviews: "críticas", favGenre: "Género favorito", best: "O melhor do ano", avg: "Nota média", hoursLabel: "Horas de filmes", hours: String(st.hours), num: n }
+      : { title: "My year on ReelPick", titles: "titles", movies: "movies", series: "series", reviews: "reviews", favGenre: "Favourite genre", best: "Best of the year", avg: "Average rating", hoursLabel: "Hours of movies", hours: String(st.hours), num: n };
+    const tg = st.topGenres[0]; const st2 = { ...st, topGenres: tg ? [{ ...tg, name: window.rpTr ? window.rpTr(tg.name) : tg.name }, ...st.topGenres.slice(1)] : [] };
+    try { const c = await recapImage(st2, year, who, { ...L, site: location.host || "reelpick" }); const r = await shareCanvas(c, "reelpick-" + year + ".png", L.title + " " + year); say(r === "downloaded" ? (isPT ? "Imagem descarregada." : "Image downloaded.") : ""); }
+    catch (e) { say(isPT ? "Não foi possível criar a imagem." : "Could not create the image."); }
+  }
+  // In December (and the first days of January) the feed offers the year in review
+  function recapBanner() {
+    const box = $("recapBanner"); if (!box) return;
+    const d = new Date(), y = d.getMonth() === 11 ? d.getFullYear() : d.getMonth() === 0 && d.getDate() <= 15 ? d.getFullYear() - 1 : null;
+    const n = y ? [...seen.values()].filter((it) => new Date(watchedAt(it)).getFullYear() === y).length : 0;
+    box.hidden = !y || n < 3; if (box.hidden) return;
+    box.replaceChildren();
+    const t = el("div"); t.appendChild(el("b", null, "Your " + y + " in review is ready")); t.appendChild(el("span", null, n + " titles, your favourite genre and the best of the year.")); box.appendChild(t);
+    const b = el("button", "cta sm", "See it"); b.type = "button"; b.onclick = () => { statsYear = y; prTab = "stats"; pendingTab = "stats"; openProfile(me.uid); }; box.appendChild(b);
+  }
+
+  // ---------------------------------------------------------------- first steps after signing in: mark a few titles, then find people
+  const ONB = "rp_onb_" ;
+  const onbDone = () => { try { return localStorage.getItem(ONB + me.uid) === "1"; } catch (e) { return true; } };
+  const onbSet = () => { try { localStorage.setItem(ONB + me.uid, "1"); } catch (e) { /* ignore */ } };
+  let onbStep = 1, onbTitles = [];
+  async function startOnboarding() {
+    if (!me || onbDone() || $("onbDlg").open || document.querySelector("dialog[open]")) return;
+    if (seen.size >= 5) { onbSet(); return; }
+    onbStep = 1; $("onbDlg").showModal(); paintOnb();
+    if (!onbTitles.length && ctx.popularTitles) { try { onbTitles = await ctx.popularTitles(); } catch (e) { onbTitles = []; } paintOnb(); }
+  }
+  function paintOnb() {
+    const n = [...seen.values()].length, body = $("onbBody"); body.replaceChildren();
+    $("onbStep").textContent = onbStep === 1 ? "1 / 2" : "2 / 2";
+    if (onbStep === 1) {
+      $("onbH").textContent = "What have you already watched?";
+      body.appendChild(el("p", "hint", "Tap the ones you have seen. Your friends see them in the feed, and ReelPick stops suggesting them."));
+      const g = el("div", "onbgrid");
+      if (!onbTitles.length) g.appendChild(el("p", "hint", "Loading…"));
+      onbTitles.forEach((it) => {
+        const k = postKey(it), b = el("button", "onbt" + (seen.has(k) ? " on" : "")); b.type = "button"; b.setAttribute("aria-pressed", seen.has(k)); b.title = it.title;
+        if (it.poster) { const i = el("img"); i.src = it.poster; i.alt = it.title; i.loading = "lazy"; b.appendChild(i); } else b.appendChild(el("span", null, it.title));
+        const ck = el("i"); ck.appendChild(icon("check", 18)); b.appendChild(ck);
+        b.onclick = () => { if (seen.has(k)) { seen.delete(k); saveSeen(); guard(cloud.removeItem(k)); } else ctx.markSeen(it); paintOnb(); };
+        g.appendChild(b);
+      });
+      body.appendChild(g);
+      $("onbNext").textContent = n ? "Next" : "Skip"; $("onbCount").textContent = n ? n + (n === 1 ? " title marked" : " titles marked") : "";
+    } else {
+      $("onbH").textContent = "Find your friends";
+      body.appendChild(el("p", "hint", "Add friends to see what they watch and what they thought of it."));
+      const list = el("div", "flist"); body.appendChild(list);
+      loadSuggestions(false).then((sg) => {
+        if (!sg.length) list.appendChild(el("p", "hint", "Nobody to suggest yet. Share your profile link with your friends."));
+        sg.slice(0, 8).forEach((p) => list.appendChild(personRow({ name: p.name || "@" + p.handle, handle: p.name ? p.handle : "", photo: p.photo, actions: actionsFor(p.uid, p.handle).map(([l, fn, g]) => [l, async (e) => { e.target.disabled = true; await fn(e); paintOnb(); }, g]) })));
+      });
+      $("onbNext").textContent = "Done"; $("onbCount").textContent = "";
+    }
+  }
+  $("onbNext").onclick = () => { if (onbStep === 1) { onbStep = 2; paintOnb(); return; } onbSet(); $("onbDlg").close(); loadFeed(true); };
+  $("onbDlg").addEventListener("cancel", () => onbSet());
+  $("tastesDlg").addEventListener("close", () => setTimeout(startOnboarding, 300));
 
   // ---------------------------------------------------------------- wiring
   $("signIn").onclick = () => cloud.signIn().catch((e) => { if (e.code !== "auth/popup-closed-by-user" && e.code !== "auth/cancelled-popup-request") say("Sign-in failed (" + (e.code || e.message) + ")."); });
@@ -396,11 +624,30 @@ export async function initSocial(ctx) {
   let myReposts = new Set();
   const postKey = (it) => it.type + ":" + it.id;
   function skeletons(n) { return Array.from({ length: n }, () => { const c = el("div", "fitem skel-card"); c.innerHTML = '<div class="sk-row"><span class="skel sk-av"></span><span class="skel sk-line w40"></span></div><div class="sk-row"><span class="skel sk-poster"></span><div class="sk-col"><span class="skel sk-line w70"></span><span class="skel sk-line w30"></span><span class="skel sk-line w90"></span><span class="skel sk-line w60"></span></div></div>'; return c; }); }
-  function paintFeedList(entries, noFriends) {
-    const box = $("feedList"); box.replaceChildren();
-    if (noFriends) box.appendChild(emptyCard("Add friends in People to see what they are watching and what they thought of it.", "Find people", () => $("friendsBtn").click()));
-    if (!entries.length) { if (!noFriends) box.appendChild(emptyCard("Your friends have not logged anything yet. When they mark a title as seen, it shows up here.")); return; }
-    for (const e of entries) if (!isBlocked(e.uid) && !(e.by && isBlocked(e.by.uid))) box.appendChild(postCard(e));
+  // The feed is drawn a page at a time while scrolling; older posts are fetched only when the end is reached.
+  const FEED_PAGE = 12;
+  let feedEntries = [], feedShown = 0, feedPer = 8, feedMore = false, feedObs = null;
+  function paintFeedList(entries, noFriends, keep) {
+    const box = $("feedList");
+    feedEntries = entries.filter((e) => !isBlocked(e.uid) && !(e.by && isBlocked(e.by.uid)));
+    if (!keep) { box.replaceChildren(); feedShown = 0; }
+    else { box.querySelectorAll(".fmore,.empty").forEach((x) => x.remove()); }
+    if (!keep && noFriends) box.appendChild(emptyCard("Add friends in People to see what they are watching and what they thought of it.", "Find people", () => $("friendsBtn").click()));
+    if (!feedEntries.length) { if (!noFriends) box.appendChild(emptyCard("Your friends have not logged anything yet. When they mark a title as seen, it shows up here.")); return; }
+    feedPage();
+  }
+  function feedPage() {
+    const box = $("feedList"); box.querySelectorAll(".fmore").forEach((x) => x.remove());
+    feedEntries.slice(feedShown, feedShown + FEED_PAGE).forEach((e) => box.appendChild(postCard(e)));
+    feedShown = Math.min(feedEntries.length, feedShown + FEED_PAGE);
+    if (feedShown < feedEntries.length || (feedMore && feedPer < 64)) {
+      const more = el("div", "fmore"); const b = el("button", "ghost", "Show more"); b.type = "button"; b.onclick = feedNext; more.appendChild(b); box.appendChild(more);
+      if ("IntersectionObserver" in window) { if (feedObs) feedObs.disconnect(); feedObs = new IntersectionObserver((xs) => { if (xs.some((x) => x.isIntersecting)) feedNext(); }, { rootMargin: "600px" }); feedObs.observe(more); }
+    } else if (feedEntries.length > FEED_PAGE) box.appendChild(el("p", "hint fend", "You're all caught up."));
+  }
+  function feedNext() {
+    if (feedShown < feedEntries.length) return feedPage();
+    if (feedMore && feedPer < 64 && !feedBusy) { feedPer *= 2; loadFeed(true, true); }
   }
   function postCard(e) {
     if (e.post) return photoCard(e);
@@ -411,7 +658,10 @@ export async function initSocial(ctx) {
     who.appendChild(avatar(ph, e.name, "sm"));
     const w = el("span"); w.appendChild(el("b", null, mine ? "You" : e.name)); w.appendChild(document.createTextNode(mine ? (it.review ? " wrote a review" : " watched it") : it.review ? " reviewed" : " watched")); who.appendChild(w);
     who.appendChild(el("small", null, timeAgo(it.updatedAt)));
-    if (mine && !e.by) { const hd = el("div", "phead2"); hd.appendChild(who); const ed = el("button", "ghost sm pdel"); ed.type = "button"; ed.append(icon("edit", 15), el("span", null, "Edit")); ed.onclick = () => window.openLog && window.openLog(it); hd.appendChild(ed); a.appendChild(hd); } else
+    if (mine && !e.by) { const hd = el("div", "phead2"); hd.appendChild(who); const tools = el("div", "ptools");
+      const sh = el("button", "ghost sm pdel"); sh.type = "button"; sh.title = "Share as an image for your stories"; sh.append(icon("image", 15), el("span", null, "Image")); sh.onclick = () => shareReview(it);
+      const ed = el("button", "ghost sm pdel"); ed.type = "button"; ed.append(icon("edit", 15), el("span", null, "Edit")); ed.onclick = () => window.openLog && window.openLog(it);
+      tools.append(sh, ed); hd.appendChild(tools); a.appendChild(hd); } else
     a.appendChild(who);
     const body = el("div", "fbody");
     const tlink = "#t/" + it.type + "/" + it.id;
@@ -423,10 +673,27 @@ export async function initSocial(ctx) {
     d.appendChild(meta);
     const rv = el("p", it.review ? "freview" : "freview none", it.review ? "“" + it.review + "”" : "No review, just watched."); if (it.review) rv.translate = false;
     if (it.review && it.spoiler && !mine) { const sp = el("button", "spoiler"); sp.type = "button"; sp.appendChild(el("span", null, "Contains spoilers · tap to read")); sp.onclick = () => sp.replaceWith(rv); d.appendChild(sp); } else d.appendChild(rv);
+    if (it.seasons) { const sl = el("div", "fseasons"); Object.keys(it.seasons).sort((x, y) => x - y).forEach((n) => sl.appendChild(el("span", null, "S" + n + " " + starsText(it.seasons[n])))); d.appendChild(sl); }
+    if (!mine) d.appendChild(quickActs(it));
     body.appendChild(d); a.appendChild(body);
 
     socialBar(a, e, "seen", key, mine, rid, true);
     return a;
+  }
+  // "Seen it" and "Watchlist" right on a friend's card
+  function quickActs(it) {
+    const row = el("div", "qacts"), k = postKey(it);
+    const mineIt = seen.get(k);
+    const sb = el("button", "qbtn" + (mineIt ? " on" : "")); sb.type = "button";
+    sb.append(icon("check", 15), el("span", null, mineIt ? (mineIt.rating ? "You: " + starsText(mineIt.rating) : "Seen") : "I've seen it"));
+    sb.onclick = () => window.openLog && window.openLog(mineIt || it);
+    row.appendChild(sb);
+    if (!mineIt) {
+      const wb = el("button", "qbtn" + (wants.has(k) ? " on" : "")); wb.type = "button";
+      const paintW = () => { wb.classList.toggle("on", wants.has(k)); wb.replaceChildren(icon("bookmark", 15), el("span", null, wants.has(k) ? "In your watchlist" : "+ Watchlist")); };
+      paintW(); wb.onclick = async () => { await toggleWant(it); paintW(); }; row.appendChild(wb);
+    }
+    return row;
   }
   const postTitle = (e) => (e.item ? e.item.title : e.post && e.post.text ? e.post.text.slice(0, 60) : isPT ? "uma foto" : "a photo");
   function socialBar(a, e, col, key, mine, rid, shareable) {
@@ -500,15 +767,17 @@ export async function initSocial(ctx) {
     socialBar(a, e, "posts", x.id, mine, null, false);
     return a;
   }
-  async function loadFeed(force) {
+  async function loadFeed(force, older) {
     if (!me || feedBusy || (!force && Date.now() - feedAt < 60e3)) return;
     const list = $("feedList");
-    feedBusy = true;
+    feedBusy = true; if (!older) feedPer = 8;
     if (!list.children.length) list.replaceChildren(...skeletons(3));
     try {
-      const [peopleList, rps] = await Promise.all([cloud.friendFeed([{ uid: me.uid, name: profile.name, handle: profile.handle }, ...friends]), cloud.myReposts().catch(() => [])]);
+      const [peopleList, rps] = await Promise.all([cloud.friendFeed([{ uid: me.uid, name: profile.name, handle: profile.handle }, ...friends], feedPer), cloud.myReposts().catch(() => [])]);
       myReposts = new Set(rps); feedAt = Date.now();
-      paintFeedFriends(peopleList.filter((p) => p.uid !== me.uid && !isBlocked(p.uid))); paintFeedList(buildFeed(peopleList), !friends.length);
+      feedMore = peopleList.some((p) => (p.items || []).length >= feedPer || (p.posts || []).length >= feedPer || (p.reposts || []).length >= feedPer);
+      paintFeedFriends(peopleList.filter((p) => p.uid !== me.uid && !isBlocked(p.uid))); paintFeedList(buildFeed(peopleList), !friends.length, older);
+      recapBanner();
       loadSuggestions(false); loadMiniTop();
     } catch (e) { console.warn(e); list.replaceChildren(el("p", "hint", "Could not load the feed (" + (e.code || e.message) + ").")); }
     feedBusy = false;
@@ -568,7 +837,7 @@ export async function initSocial(ctx) {
   }
   document.querySelectorAll("#lbSeg button").forEach((b) => { b.onclick = () => { lbScope = b.dataset.v; document.querySelectorAll("#lbSeg button").forEach((x) => x.classList.toggle("on", x === b)); loadBoard(false); }; });
   let curTab = "feed";
-  const onTab = (t) => { curTab = t; if (t === "profile") { const m = location.hash.match(/^#u\/(.+)$/); if (m) renderProfilePage(decodeURIComponent(m[1])); } if (t === "top") loadBoard(false); if (t === "feed") loadFeed(false); if (t === "chat") { paintChatList(); paintNotifBtn(); if (chatWith) cloud.markRead(chatWith); } paintBadge(); };
+  const onTab = (t) => { curTab = t; if (t === "profile") { const l = location.hash.match(/^#l\/([^/]+)\/([^/]+)$/); if (l) { openListId = decodeURIComponent(l[2]); prTab = "lists"; prUid = decodeURIComponent(l[1]); renderProfilePage(prUid); } else { const m = location.hash.match(/^#u\/(.+)$/); if (m) { if (openListId) { openListId = null; prTab = "lists"; } renderProfilePage(decodeURIComponent(m[1])); } } } if (t === "top") loadBoard(false); if (t === "feed") loadFeed(false); if (t === "chat") { paintChatList(); paintNotifBtn(); if (chatWith) cloud.markRead(chatWith); } paintBadge(); };
 
   // ---------------------------------------------------------------- new post (text + photo)
   let compPhoto = null;
@@ -831,7 +1100,7 @@ export async function initSocial(ctx) {
   cloud.onAuth(onAuth);
 
   return {
-    enabled: true, signedIn: () => !!me, onTab, shareWith,
+    enabled: true, signedIn: () => !!me, onTab, shareWith, addToList, shareReview: (it) => (me ? shareReview(it) : null),
     isWanted: (k) => wants.has(k), toggleWant, titleFriends, shareKey: (k) => cloud.shareKey(k),
     seenChanged: () => { feedAt = 0; if (curTab === "profile" && me && prUid === me.uid) renderProfilePage(me.uid); else if (curTab === "feed") setTimeout(() => loadFeed(true), 800); },
     readBackdrops: () => cloud.readBackdrops(), writeBackdrops: (m) => (me ? cloud.writeBackdrops(m) : null),

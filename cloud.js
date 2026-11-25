@@ -2,7 +2,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser, reauthenticateWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch, query, where, documentId, limit, orderBy, getCountFromServer, onSnapshot, addDoc, limitToLast, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { sanitizeItem, keyOf, sanitizeProfile, pairId } from "./seen.js?v=1795533197";
+import { sanitizeItem, keyOf, sanitizeProfile, pairId } from "./seen.js?v=1795619163";
 
 export async function init(config) {
   const app = initializeApp(config), auth = getAuth(app), db = getFirestore(app), provider = new GoogleAuthProvider();
@@ -14,6 +14,11 @@ export async function init(config) {
   const reqOut = (r) => ({ from: r.from, to: r.to, fromName: String(r.fromName || "").slice(0, 40), fromHandle: String(r.fromHandle || "").slice(0, 20), toHandle: String(r.toHandle || "").slice(0, 20), createdAt: r.createdAt || 0 });
   let discover = true;   // "show me in friend suggestions"
   const cardOf = (p) => { const x = sanitizeProfile(p); return { name: x.name, handle: x.handle || null, photo: x.photo || null, discover, updatedAt: Date.now() }; };
+  const cleanList = (l) => {
+    const items = (Array.isArray(l.items) ? l.items : []).map((x) => { const it = sanitizeItem({ ...x, title: x.title || "Untitled" }); return it ? { type: it.type, id: it.id, title: it.title, year: it.year || "", poster: it.poster || null } : null; }).filter(Boolean);
+    const uniq = []; const k = new Set(); items.forEach((x) => { const kk = keyOf(x); if (!k.has(kk)) { k.add(kk); uniq.push(x); } });
+    return { name: String(l.name || "").trim().slice(0, 60) || "List", desc: String(l.desc || "").slice(0, 300), items: uniq.slice(0, 100), updatedAt: Number(l.updatedAt) || 0, createdAt: Number(l.createdAt) || 0 };
+  };
   const deleteAll = async (docs) => { for (const part of chunks(docs)) { const b = writeBatch(db); part.forEach((d) => b.delete(d.ref)); await b.commit(); } };
 
   return {
@@ -189,6 +194,20 @@ export async function init(config) {
       if (!on) return deleteDoc(ref);
       await setDoc(ref, { type: s.type, id: s.id, title: s.title, year: s.year || "", poster: s.poster || null, at: Date.now() });
     },
+    // ------------------------------------------------ own lists ("Best of 2026"…): users/{uid}/lists/{id}
+    async loadLists(uid) {
+      try { return (await getDocs(query(collection(db, "users", uid || me(), "lists"), orderBy("updatedAt", "desc"), limit(50)))).docs.map((d) => ({ id: d.id, ...cleanList(d.data()) })); }
+      catch (e) { return []; }
+    },
+    async loadList(uid, id) { try { const d = await getDoc(doc(db, "users", uid, "lists", id)); return d.exists() ? { id: d.id, ...cleanList(d.data()) } : null; } catch (e) { return null; } },
+    /** Creates (no id) or replaces a list. Returns its id. */
+    async saveList(l, id) {
+      const data = { ...cleanList(l), updatedAt: Date.now() }; if (!id) data.createdAt = data.updatedAt; else delete data.createdAt;
+      if (id) { await setDoc(doc(db, "users", me(), "lists", id), { ...data, createdAt: Number(l.createdAt) || data.updatedAt }); return id; }
+      return (await addDoc(collection(db, "users", me(), "lists"), data)).id;
+    },
+    async deleteList(id) { await deleteDoc(doc(db, "users", me(), "lists", id)); },
+
     // ------------------------------------------------ friends' ratings of one title
     async ratingsOn(key, people) {
       const one = async (p) => { try { const d = await getDoc(doc(db, "users", p.uid, "seen", key)); return d.exists() ? { ...p, item: sanitizeItem(d.data()) } : null; } catch (e) { return null; } };
@@ -241,7 +260,7 @@ export async function init(config) {
 
     async deleteAccount(handle) {
       const uid = me(), f = collection(db, "friendships"), r = collection(db, "requests");
-      const lists = await Promise.all([getDocs(seenCol(uid)), getDocs(collection(db, "users", uid, "reposts")), getDocs(collection(db, "users", uid, "blocks")), getDocs(collection(db, "users", uid, "posts")), getDocs(collection(db, "users", uid, "watchlist")), getDocs(collection(db, "users", uid, "notifs")), getDocs(query(f, where("a", "==", uid))), getDocs(query(f, where("b", "==", uid))), getDocs(query(r, where("to", "==", uid))), getDocs(query(r, where("from", "==", uid)))]);
+      const lists = await Promise.all([getDocs(seenCol(uid)), getDocs(collection(db, "users", uid, "reposts")), getDocs(collection(db, "users", uid, "blocks")), getDocs(collection(db, "users", uid, "posts")), getDocs(collection(db, "users", uid, "watchlist")), getDocs(collection(db, "users", uid, "notifs")), getDocs(collection(db, "users", uid, "lists")), getDocs(query(f, where("a", "==", uid))), getDocs(query(f, where("b", "==", uid))), getDocs(query(r, where("to", "==", uid))), getDocs(query(r, where("from", "==", uid)))]);
       for (const l of lists) await deleteAll(l.docs);
       try {
         const chats = await getDocs(query(collection(db, "chats"), where("members", "array-contains", uid)));
